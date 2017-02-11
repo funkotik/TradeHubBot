@@ -3,21 +3,32 @@ package controllers
 import java.io.File
 import javax.inject.{Inject, Singleton}
 
+import telegram._
 import com.ning.http.client.{AsyncCompletionHandler, AsyncHttpClient, Response}
 import com.ning.http.client.multipart.StringPart
 import play.api.libs.json.Json
 import play.api.libs.ws.{WSClient, WSResponse}
 import com.ning.http.client.multipart.FilePart
+import com.pengrad.telegrambot.model.Message
+
 import scala.concurrent.Promise
 import play.api.libs.ws.ning.NingWSResponse
 import play.api.mvc.{Action, Controller, MultipartFormData}
 
 import scala.concurrent.{ExecutionContext, Future}
+import org.json4s._
+import org.json4s.native.JsonMethods
+import org.json4s.native.JsonMethods._
+
+
+
+
 
 //@Singleton
 class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration)
                                      (implicit val exc: ExecutionContext)
   extends Controller {
+
 
   val url = s"https://api.telegram.org/bot${conf.getString("token").get}"
 
@@ -32,8 +43,11 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def inbox = Action { request =>
-    val body = request.body
-    println(body)
+    implicit val formats = DefaultFormats
+    val js = request.body.toString
+    val msg = JsonMethods.parse(js).extract[Message]
+    println(msg)
+    println(js)
     Ok("kek")
   }
 
@@ -41,7 +55,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
     val bodyParts = List(
       new StringPart("url", "https://52.174.38.160/webhook", "UTF-8"),
-      new FilePart("certificate", new File("/home/vova/TradeHubBot/public/certificates/nginx.crt"))
+      new FilePart("certificate", new File(s"${conf.getString("filePrefix").get}public/certificates/nginx.crt"))
     )
     val client = ws.underlying.asInstanceOf[AsyncHttpClient]
 
