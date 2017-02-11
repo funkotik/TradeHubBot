@@ -9,7 +9,6 @@ import com.ning.http.client.multipart.StringPart
 import play.api.libs.json.Json
 import play.api.libs.ws.{WSClient, WSResponse}
 import com.ning.http.client.multipart.FilePart
-import com.pengrad.telegrambot.model.Message
 
 import scala.concurrent.Promise
 import play.api.libs.ws.ning.NingWSResponse
@@ -17,10 +16,11 @@ import play.api.mvc.{Action, Controller, MultipartFormData}
 
 import scala.concurrent.{ExecutionContext, Future}
 import org.json4s._
-import org.json4s.native.JsonMethods
-import org.json4s.native.JsonMethods._
-
-
+import org.json4s.native.{JsonMethods, Serialization}
+import org.json4s.native.JsonMethods.{parse => parse4s, render => render4s ,_}
+import telegram.methods.{ChatAction, ParseMode}
+import org.json4s.ext.EnumNameSerializer
+import org.json4s.jackson.Json4sModule
 
 
 
@@ -43,11 +43,17 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def inbox = Action { request =>
-    implicit val formats = DefaultFormats
-    val js = request.body.toString
-    val msg = JsonMethods.parse(js).extract[Message]
-    println(msg)
-    println(js)
+    val js = request.body.asJson.get
+
+    implicit val formats = Serialization.formats(NoTypeHints) +
+      new EnumNameSerializer(ChatAction) +
+      new EnumNameSerializer(ParseMode)
+
+    def toJson[T](t: T): String = compact(render4s(Extraction.decompose(t).underscoreKeys))
+
+    def fromJson[T: Manifest](json: String): T = parse4s(json).camelizeKeys.extract[T]
+
+    println(fromJson[Message](js.toString))
     Ok("kek")
   }
 

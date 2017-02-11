@@ -1,5 +1,6 @@
 package telegram
 
+
 /** This object represents a message.
   *
   * @param messageId              Unique message identifier
@@ -78,7 +79,6 @@ case class  Message(
                migrateToChatId       : Option[Long] = None,
                migrateFromChatId     : Option[Long] = None,
                pinnedMessage         : Option[Message] = None
-             ) {
-  def sender = chat.id
-}
+             )
+
 

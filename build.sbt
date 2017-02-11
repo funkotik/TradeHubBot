@@ -9,7 +9,8 @@ routesGenerator := InjectedRoutesGenerator
 scalaVersion := "2.11.7"
 
 libraryDependencies ++= Seq(jdbc, cache, ws, specs2 % Test,
-  "com.github.pengrad" % "java-telegram-bot-api" % "2.3.1.1",
+  "org.json4s" %% "json4s-jackson" % "3.3.0",
+  "org.json4s" %% "json4s-ext" % "3.3.0",
   "org.json4s" %% "json4s-native" % "3.3.0")
 
 unmanagedResourceDirectories in Test <+= baseDirectory(_ / "target/web/public/test")
