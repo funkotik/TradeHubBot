@@ -26,7 +26,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     ws.url(url + "/getWebhookInfo").get().map(x => println(x.body))
   }
 
-  def index = Action {
+  def index = Action {request =>
+    println(request)
     Ok("lol")
   }
 
