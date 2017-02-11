@@ -21,7 +21,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   val url = s"https://api.telegram.org/bot${conf.getString("token").get}"
 
-  val webhookStatus = setWebhook.map(println)
+  val webhookStatus = setWebhook.map(x => println(x.body))
 
   def index = Action {
     Ok("lol")
@@ -35,12 +35,12 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   def setWebhook = {
 
     val bodyParts = List(
-      new StringPart("url", "https://52.174.38.160/", "UTF-8"),
-      new FilePart("certificate", new File("/home/vova/TradeHubBot/public/certificates/nginx.crt"))
+      new StringPart("url", "https://52.174.38.160", "UTF-8"),
+      new FilePart("certificate", new File("public/certificates/nginx.crt"))
     )
     val client = ws.underlying.asInstanceOf[AsyncHttpClient]
 
-    val builder = client.preparePost(url)
+    val builder = client.preparePost(url + "/setWebhook")
 
     builder.setHeader("Content-Type", "multipart/form-data")
     bodyParts.foreach(builder.addBodyPart)
@@ -49,6 +49,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
     client.executeRequest(builder.build(), new AsyncCompletionHandler[Response]() {
       override def onCompleted(response: Response) = {
+        println(response.getResponseBody)
         result.success(NingWSResponse(response))
         response
       }
