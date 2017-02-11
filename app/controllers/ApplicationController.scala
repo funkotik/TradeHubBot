@@ -44,7 +44,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def inbox = Action { request =>
     val js = request.body.asJson.get
-
+    println(js)
     implicit val formats = Serialization.formats(NoTypeHints) +
       new EnumNameSerializer(ChatAction) +
       new EnumNameSerializer(ParseMode)
