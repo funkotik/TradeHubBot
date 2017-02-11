@@ -9,6 +9,7 @@ import com.ning.http.client.multipart.StringPart
 import play.api.libs.json.Json
 import play.api.libs.ws.{WSClient, WSResponse}
 import com.ning.http.client.multipart.FilePart
+import org.json4s
 
 import scala.concurrent.Promise
 import play.api.libs.ws.ning.NingWSResponse
@@ -42,6 +43,12 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def toJson[T](t: T): String = compact(render4s(Extraction.decompose(t).underscoreKeys))
 
+  def toAnswer[T](t: T, method: String): String =
+    compact(
+      render4s((Extraction.decompose(t) ++
+      new JObject(List("method_name" -> JString(method)))).underscoreKeys)
+    )
+
   def fromJson[T: Manifest](json: String): T = parse4s(json).camelizeKeys.extract[T]
 
 
@@ -56,9 +63,9 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     val response = update.message map {x =>
       SendMessage(Left(x.chat.id), "Пока что я слишком слаб чтобы понять это")
     }
-    println(response.getOrElse("lol"))
+    println(response.get)
     println(toJson(response.get))
-    Ok(toJson(response.get))
+    Ok(toAnswer(response.get, response.get.methodName))
   }
 
   def setWebhook = {
