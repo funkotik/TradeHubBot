@@ -4,7 +4,7 @@
 
 # Home page
 GET         /                    controllers.ApplicationController.index
-POST        /webhook             controllers.ApplicationController.log(any)
+POST        /webhook             controllers.ApplicationController.log
 
 # Map static resources from the /public folder to the /assets URL path
 GET         /assets/*file        controllers.Assets.at(path="/public", file)
