@@ -64,7 +64,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       SendMessage(Left(x.chat.id), "Пока что я слишком слаб чтобы понять это")
     }
     println(response.get)
-    println(toJson(response.get))
+    println(toAnswer(response.get, response.get.methodName))
     Ok(toAnswer(response.get, response.get.methodName))
   }
 
