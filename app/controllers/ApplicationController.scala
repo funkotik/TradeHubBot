@@ -54,7 +54,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     val js = request.body.asJson.get
     val update = fromJson[Update](js.toString)
     update.message match {
-      case Some(x) => SendMessage(Left(x.chat.id), "Пока что я слишком слаб чтобы понять это")
+      case Some(x) => println(SendMessage(Left(x.chat.id), "Пока что я слишком слаб чтобы понять это").methodName)
       case None =>
     }
 
