@@ -53,12 +53,11 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   def inbox = Action { request =>
     val js = request.body.asJson.get
     val update = fromJson[Update](js.toString)
-    update.message match {
-      case Some(x) => println(SendMessage(Left(x.chat.id), "Пока что я слишком слаб чтобы понять это").methodName)
-      case None =>
+    val response = update.message map {x =>
+      SendMessage(Left(x.chat.id), "Пока что я слишком слаб чтобы понять это")
     }
-
-    Ok
+    println(response.getOrElse("lol"))
+    Ok(toJson(response.get))
   }
 
   def setWebhook = {
