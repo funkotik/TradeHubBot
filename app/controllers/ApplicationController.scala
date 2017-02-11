@@ -53,7 +53,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
     def fromJson[T: Manifest](json: String): T = parse4s(json).camelizeKeys.extract[T]
 
-    println(fromJson[Message](js.toString))
+    println(fromJson[Update](js.toString))
     Ok("kek")
   }
 
