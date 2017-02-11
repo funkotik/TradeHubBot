@@ -31,8 +31,9 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     Ok("lol")
   }
 
-  def log = Action { request =>
-    println(request)
+  def inbox = Action { request =>
+    val body = request.body
+    println(body)
     Ok("kek")
   }
 
