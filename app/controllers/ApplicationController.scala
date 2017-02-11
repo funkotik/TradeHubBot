@@ -23,7 +23,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   val webhookStatus = setWebhook.map{x =>
     println(x.body)
-    ws.url(url + "/getWebhookInfo").get().map(println)
+    ws.url(url + "/getWebhookInfo").get().map(x => println(x.body))
   }
 
   def index = Action {
