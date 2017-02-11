@@ -39,7 +39,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   def setWebhook = {
 
     val bodyParts = List(
-      new StringPart("url", "https://52.174.38.160", "UTF-8"),
+      new StringPart("url", "https://52.174.38.160/webhook", "UTF-8"),
       new FilePart("certificate", new File("/home/vova/TradeHubBot/public/certificates/nginx.crt"))
     )
     val client = ws.underlying.asInstanceOf[AsyncHttpClient]
