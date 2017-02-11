@@ -21,7 +21,10 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   val url = s"https://api.telegram.org/bot${conf.getString("token").get}"
 
-  val webhookStatus = setWebhook.map(x => println(x.body))
+  val webhookStatus = setWebhook.map{x =>
+    println(x.body)
+    ws.url(url + "/getWebhookInfo").get().map(println)
+  }
 
   def index = Action {
     Ok("lol")
