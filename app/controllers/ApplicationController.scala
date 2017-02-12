@@ -64,7 +64,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       SendMessage(Left(x.chat.id), "Пока что я слишком слаб чтобы понять это")
     }
     println(toAnswer(response.get, "sendMessage"))
-    Ok(toAnswer(response.get, "sendMessage"))
+    Ok(Json.parse(toAnswer(response.get, "sendMessage")))
   }
 
   def sendMessage = {
