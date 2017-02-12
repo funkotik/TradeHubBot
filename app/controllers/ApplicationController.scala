@@ -145,86 +145,85 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     for {
       uc <- userChat.get(contact.phoneNumber)
       com <- company.get(contact.phoneNumber)
+      insertRes <- {
+        userChat.del(uc.map(_.id).getOrElse(-1)).flatMap { _ =>
+          val newUser =
+            UsersChatsRow(
+              0, msg.chat.id.toInt, "", contact.phoneNumber, com.map(_.companyId), contact.firstName,
+              contact.lastName, new DateSQL(new Date().getTime)
+            )
+          println(newUser)
+          userChat.insert(newUser)
+        }
+      }
     } yield {
-      val newUser =
-        UsersChatsRow(
-          0, msg.chat.id.toInt, "", contact.phoneNumber, com.map(_.companyId), contact.firstName,
-          contact.lastName, new DateSQL(new Date().getTime)
-        )
-      if (uc.isDefined) {
-        if (com.isDefined) {
+      if (insertRes >= 0) {
+        if (uc.isDefined) {
+          if (com.isDefined) {
+            SendMessage(Left(msg.chat.id),
+              s"""
+                 |Этот номер телефона уже был зарегистрирован пользователем
+                 |${uc.get.firstName} ${uc.get.lastName.getOrElse("")}
+                 |${uc.get.dateRegistred}
+                 |
+                 |Вы выбраны представителем компании "${com.get.companyName}", так как
+                 |этот номер телефона был указан при составлении контракта.
+                 |
+                 |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
+                 |(комманда /feedback ) указав имя и номер телефона.
+          """.
+                stripMargin
+            )
+          } else {
+            SendMessage(Left(msg.
+              chat.id),
+              s"""
+                 |Этот номер телефона уже был зарегистрирован пользователем
+                 |${uc.get.firstName} ${uc.get.lastName.getOrElse("")}
+                 |${uc.get.dateRegistred}
+                 |
+                 |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
+                 |(комманда /feedback ) указав имя и номер телефона.
+          """.stripMargin
+            )
+          }
+        }
+        else if (com.isDefined) {
           SendMessage(Left(msg.chat.id),
             s"""
-               |Этот номер телефона уже был зарегистрирован пользователем
-               |${
-              uc.get.firstName
-            } ${
-              uc.get.lastName.getOrElse("")
-            }
-               |${
-              uc.get.dateRegistred
-            }
+               |Поздровляем, вы успешно загестрировались под именем
+               |${contact.firstName} ${contact.lastName.getOrElse("")}
                |
-               |Вы выбраны представителем компании "${
-              com.get.companyName
-            }", так как
+               |Вы выбраны представителем компании "${com.get.companyName.getOrElse("")}, так как
                |этот номер телефона был указан при составлении контракта.
                |
-               |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
+             |Если вы не имеете отношения к этой компании то напишите об этом в поддержку,
                |(комманда /feedback ) указав имя и номер телефона.
           """.stripMargin)
         } else {
           SendMessage(Left(msg.chat.id),
             s"""
-               |Этот номер телефона уже был зарегистрирован пользователем
-               |${
-              uc.get.firstName
-            } ${
-              uc.get.lastName.getOrElse("")
-            }
-               |${
-              uc.get.dateRegistred
-            }
+               |Поздровляем, вы успешно загестрировались под именем
+               |${contact.firstName} ${contact.lastName.getOrElse("")}
                |
-               |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
-               |(комманда /feedback ) указав имя и номер телефона.
-          """.stripMargin)
+               |В нашей базе данных мы не нашли компаний, соответсвующих вашему номеру телефона,
+               |поэтому некоторые функции бота для вас будут недоступны.
+               |
+               |Если являетесь уполномоченым представителем какой-либо компании в нашем реестре,
+               |то напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
+          """.stripMargin
+          )
         }
-      }
-      else if (com.isDefined) {
-        SendMessage(Left(msg.chat.id),
-          s"""
-             |Поздровляем, вы успешно загестрировались под именем
-             |${
-            contact.firstName
-          } ${
-            contact.lastName.getOrElse("")
-          }
-             |
-             |Вы выбраны представителем компании "${
-            com.get.companyName
-          }", так как
-             |этот номер телефона был указан при составлении контракта.
-             |
-             |Если вы не имеете отношения к этой компании то напишите об этом в поддержку,
-             |(комманда /feedback ) указав имя и номер телефона.
-          """.stripMargin)
       } else {
-        SendMessage(Left(msg.chat.id),
-          s"""
-             |Поздровляем, вы успешно загестрировались под именем
-             |${
-            contact.firstName
-          } ${
-            contact.lastName.getOrElse("")
-          }
-             |
-             |В нашей базе данных мы не нашли компаний, соответсвующих вашему номеру телефона,
-             |поэтому некоторые функции бота для вас будут недоступны.
-             |
-             |Если являетесь уполномоченым представителем какой-либо компании в нашем реестре,
-             |то напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
-          """.stripMargin)
+        Future {
+          SendMessage(Left(msg.chat.id),
+            """
+              |Возникла проблема.
+              |Пожалуйста, напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
+            """.stripMargin
+          )
+
+        }
       }
     }
 

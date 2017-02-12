@@ -30,4 +30,7 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
   def insert(user: UsersChatsRow): Future[Int] =
     db.run(userChats returning userChats.map(_.id) += user)
 
+  def del(id: Int) =
+    db.run(userChats.filter(_.id === id).delete)
+
 }
