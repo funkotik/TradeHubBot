@@ -71,6 +71,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       ).flatMap { data =>
         data.get("command").map(_.toString()).zip(data.get("value").map(_.toString())).headOption
       }
+      println(callbackData)
       command match {
         case Some("/start") => start(msg)
         case Some("/create_bid") => create_bid(msg)
