@@ -141,16 +141,19 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def create_bid_choose_commodity(chatId: Long, value: String): Future[SendMessage] = {
 
-    userChat.getUserCommodities(chatId, value == "s").map{commSeq =>
+    userChat.getUserCommodities(chatId, value == "s").map { commSeq =>
       val buttons =
         commSeq.map(c =>
           Seq(
-            InlineKeyboardButton(c._2, Some(s"c_b2;${c._1.toString}"))
+            InlineKeyboardButton(c._2, Some(s"c_b2;${c._1.toString}$value"))
           )
         )
 
       val keyboard = InlineKeyboardMarkup(buttons)
-      SendMessage(Left(chatId),"Выберите товар", replyMarkup = Some(keyboard))
+      SendMessage(Left(chatId),
+        s"Выберите товар, который вы хотите ${if (value == "b") "купить" else "продать"}",
+        replyMarkup = Some(keyboard)
+      )
     }
 
 

@@ -39,15 +39,15 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
 
   def getUserCommodities(userId: Long, isSell: Boolean): Future[Seq[(Int, String)]] = {
     val query = for {
-        ((usr, con), comm) <- {
+      (comm, _) <- {
           if (isSell)
             userChats join
               contracts on (_.contragentId === _.producerId) join
-              commodities on (_._2.commodityId === _.commodityId)
+              commodities on (_._2.commodityId === _.commodityId) groupBy(_._2)
           else
             userChats join
               contracts on (_.contragentId === _.consumerId) join
-              commodities on (_._2.commodityId === _.commodityId)
+              commodities on (_._2.commodityId === _.commodityId) groupBy(_._2)
         }
       } yield (comm.commodityId, comm.name)
 
