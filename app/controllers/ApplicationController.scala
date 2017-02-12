@@ -58,7 +58,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
 
   def index = Action {
-    Ok("lol")
+    Ok("Выкатывай")
   }
 
   def inbox = Action.async { request =>
@@ -79,13 +79,10 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         }
 
       case (None, Some(cbq)) =>
-        println(cbq.data)
         val callbackData = cbq.data.map(_.split(";")) flatMap {
           case Array(c, v) => Some((c, v))
           case _ => None
         }
-        println(callbackData)
-
         callbackData match {
           case Some((cbCom, cbVal)) =>
             cbCom match {
@@ -143,11 +140,20 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def create_bid_choose_commodity(chatId: Long, value: String): Future[SendMessage] = {
-    Future successful {
-      SendMessage(Left(chatId),
-        "Я брокер-бот, мониторю торговые площадки, делаю прогнозы рынков," +
-          " помогаю заключить контракт, организовываю торговые коммуникации")
+
+    userChat.getUserCommodities(chatId, value == "s").map{commSeq =>
+      val buttons =
+        commSeq.map(c =>
+          Seq(
+            InlineKeyboardButton(c._2, Some(s"c_b2;${c._1.toString}"))
+          )
+        )
+
+      val keyboard = InlineKeyboardMarkup(buttons)
+      SendMessage(Left(chatId),"Выберите товар", replyMarkup = Some(keyboard))
     }
+
+
   }
 
   def store_contact(chatId: Long, contact: Contact): Future[SendMessage] = {
