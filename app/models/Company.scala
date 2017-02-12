@@ -22,5 +22,5 @@ class Company @Inject()(dbConfigProvider: DatabaseConfigProvider)
   import dbConfig.driver.api._
 
   def get(tel: String): Future[Option[CompaniesRow]] =
-    db.run(companies.filter(_.telephone.like(s"%$tel%").result.headOption)
+    db.run(companies.filter(_.telephone.like(s"%$tel%")).result.headOption)
 }
