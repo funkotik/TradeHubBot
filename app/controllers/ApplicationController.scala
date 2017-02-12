@@ -24,6 +24,8 @@ import telegram.methods.{ChatAction, ParseMode, SendMessage}
 import org.json4s.ext.EnumNameSerializer
 import play.api.libs.ws.ahc.AhcWSResponse
 
+import scala.util.{Failure, Success, Try}
+
 
 class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration,
                                       company: Company, commodity: Commodity,
@@ -88,6 +90,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             cbCom match {
               case "c_b1" => create_bid_choose_commodity(cbq.from.id, cbVal)
               case "c_b2" => create_bid_choose_partner(cbq.from.id, cbVal)
+              case "c_b3" => create_bid_ask_conditions(cbq.from.id, cbVal)
             }
           case _ => Future successful errorMsg(cbq.from.id)
 
@@ -95,15 +98,6 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
     }
     response.map(x => Ok(toAnswerJson(x, x.methodName)))
-  }
-
-  def errorMsg(chatId: Long) = {
-    SendMessage(Left(chatId),
-      """
-        |Возникла проблема.
-        |Пожалуйста, напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
-      """.stripMargin
-    )
   }
 
   def start(chatId: Long): Future[SendMessage] = {
@@ -169,7 +163,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             val buttons =
               comSeq.map(c =>
                 Seq(
-                  InlineKeyboardButton(c._2, Some(s"c_b2;${c._1}:$commId:$value"))
+                  InlineKeyboardButton(s"${c._2}, Контракт #${c._3} ", Some(s"c_b3;${c._3}"))
                 )
               )
 
@@ -180,6 +174,11 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             )
         }
     }
+  }
+
+  def create_bid_ask_conditions(chatId: Long, value: String): Future[SendMessage] = {
+    val reply = ForceReply()
+    Future successful SendMessage(Left(chatId), "Опишите условия сделки", replyMarkup = Some(reply))
   }
 
   def store_contact(chatId: Long, contact: Contact): Future[SendMessage] = {
@@ -260,6 +259,15 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       }
     }
 
+  }
+
+  def errorMsg(chatId: Long): SendMessage = {
+    SendMessage(Left(chatId),
+      """
+        |Возникла проблема.
+        |Пожалуйста, напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
+      """.stripMargin
+    )
   }
 
   def getCommand(msg: Message): Option[String] = {

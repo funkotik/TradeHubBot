@@ -54,7 +54,7 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
     db.run(query.result)
   }
 
-  def getPartners(userId: Long, commodityId: Int, isSell: Boolean): Future[Seq[(Int, String)]] = {
+  def getPartners(userId: Long, commodityId: Int, isSell: Boolean): Future[Seq[(Int, String, Int)]] = {
     val query = for {
       ((usr, cont), com) <- {
         if (isSell)
@@ -66,7 +66,7 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
             contracts on (_.contragentId === _.consumerId) join
             companies on (_._2.consumerId === _.companyId)
       }
-    } yield (com.companyId, com.companyName)
+    } yield (com.companyId, com.companyName, cont.contractNumber)
 
     db.run(query.result)
   }
