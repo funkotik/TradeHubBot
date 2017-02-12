@@ -45,8 +45,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def toAnswer[T](t: T, method: String): String =
     compact(
-      render4s((Extraction.decompose(t) ++
-      new JObject(List("method" -> JString(method)))).underscoreKeys)
+      render4s(new JObject(Extraction.decompose(t).asInstanceOf[JObject].obj ++
+        List("method" -> JString(method))).underscoreKeys)
     )
 
   def fromJson[T: Manifest](json: String): T = parse4s(json).camelizeKeys.extract[T]
