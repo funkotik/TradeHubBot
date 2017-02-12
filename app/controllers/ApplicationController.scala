@@ -1,8 +1,11 @@
 package controllers
 
 import java.io.File
+import java.sql.{Date => DateSQL}
+import java.util.Date
 import javax.inject.Inject
 
+import models.Tables.UsersChatsRow
 import models._
 import telegram._
 import org.asynchttpclient.{AsyncCompletionHandler, AsyncHttpClient, Response}
@@ -25,7 +28,8 @@ import play.api.libs.ws.ahc.AhcWSResponse
 class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration,
                                       company: Company, commodity: Commodity,
                                       bid: Bid, contract: Contract,
-                                      monitoringNews: MonitoringNews)
+                                      monitoringNews: MonitoringNews,
+                                      userChat: UserChat)
                                      (implicit val exc: ExecutionContext)
   extends Controller {
 
@@ -57,44 +61,63 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     Ok("lol")
   }
 
-  def inbox = Action { request =>
+  def inbox = Action.async { request =>
     val js = request.body.asJson.get
     val update = fromJson[Update](js.toString)
     val response = update.message map { msg =>
       val command = getCommand(msg)
-      println(command)
+      val callbackData = update.callbackQuery.map(x =>
+        Json.parse(x.data.getOrElse("")).as[JsObject].value
+      ).flatMap { data =>
+        data.get("command").map(_.toString()).zip(data.get("value").map(_.toString())).headOption
+      }
       command match {
         case Some("/start") => start(msg)
         case Some("/create_bid") => create_bid(msg)
         case _ =>
-          update.callbackQuery.flatMap{ x =>
-            val data = Json.parse(x.data.getOrElse("")).as[JsObject].value
-            data.get("command").map(_.toString) flatMap {
-              case "create_bid" => data.get("value").map(x => create_bid_choose_commodity(msg, x.toString))
-            }
-          }.getOrElse(SendMessage(Left(msg.chat.id), "Пока что я слишком слаб чтобы понять это"))
+          callbackData match {
+            case Some((cbCom, cbVal)) =>
+              cbCom match {
+                case "create_bid" => create_bid_choose_commodity(msg, cbVal)
+              }
+            case _ =>
+              msg.contact match {
+                case Some(x) => store_contact(msg, x)
+                case None =>
+                  Future {
+                    SendMessage(Left(msg.chat.id), "Пока что я слишком слаб чтобы понять это")
+                  }
+              }
+          }
       }
-
     }
 
-    response.map(x => Ok(toAnswerJson(x, x.methodName))).getOrElse(Ok("success"))
+    response.map(_.map(x => Ok(toAnswerJson(x, x.methodName)))).getOrElse(Future.successful(Ok("success")))
   }
 
-  def start(msg: Message): SendMessage = {
+  def start(msg: Message): Future[SendMessage] = {
     val buttons = Seq(
       Seq(
         KeyboardButton("Поделиться номером телефона", requestContact = Some(true))
       )
     )
     val keyboard = ReplyKeyboardMarkup(buttons, oneTimeKeyboard = Some(true))
-    SendMessage(Left(msg.chat.id),
-      "Я брокер-бот, мониторю торговые площадки, делаю прогнозы рынков," +
-        " помогаю заключить контракт, организовываю торговые коммуникации." +
-        "Для продожения мне необходим ваш номер телефона, его вы мне можете предоставить " +
-        "просто кликнув по кнопке снизу.", replyMarkup = Some(keyboard))
+
+    Future {
+      SendMessage(Left(msg.chat.id),
+        """
+          |Я брокер-бот, мониторю торговые площадки, делаю прогнозы рынков,
+          |помогаю заключить контракт, организовываю торговые коммуникации.
+          |
+          |Для продожения мне необходим ваш номер телефона, его вы мне можете предоставить,
+          |просто кликнув по кнопке снизу.
+        """.
+          stripMargin,
+        replyMarkup = Some(keyboard))
+    }
   }
 
-  def create_bid(msg: Message): SendMessage = {
+  def create_bid(msg: Message): Future[SendMessage] = {
     val cbDataSell = Json.obj("value" -> "sell", "command" -> "create_bid").toString()
     val cbDataBuy = Json.obj("value" -> "buy", "command" -> "create_bid").toString()
     val buttons = Seq(
@@ -104,14 +127,106 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       )
     )
     val keyboard = InlineKeyboardMarkup(buttons)
-    SendMessage(Left(msg.chat.id), "Какой тип заявки вы хотите составить?", replyMarkup = Some(keyboard))
+    Future {
+      SendMessage(Left(msg.chat.id), "Какой тип заявки вы хотите составить?", replyMarkup = Some(keyboard))
+    }
   }
 
-  def create_bid_choose_commodity(msg: Message, value: String): SendMessage = {
+  def create_bid_choose_commodity(msg: Message, value: String): Future[SendMessage] = {
+    Future {
+      SendMessage(Left(msg.chat.id),
+        "Я брокер-бот, мониторю торговые площадки, делаю прогнозы рынков," +
+          " помогаю заключить контракт, организовываю торговые коммуникации")
+    }
+  }
 
-    SendMessage(Left(msg.chat.id),
-      "Я брокер-бот, мониторю торговые площадки, делаю прогнозы рынков," +
-        " помогаю заключить контракт, организовываю торговые коммуникации")
+  def store_contact(msg: Message, contact: Contact): Future[SendMessage] = {
+
+    for {
+      uc <- userChat.get(contact.phoneNumber)
+      com <- company.get(contact.phoneNumber)
+    } yield {
+      val newUser =
+        UsersChatsRow(
+          0, msg.chat.id.toInt, "", contact.phoneNumber, com.map(_.companyId), contact.firstName,
+          contact.lastName, new DateSQL(new Date().getTime)
+        )
+      if (uc.isDefined) {
+        if (com.isDefined) {
+          SendMessage(Left(msg.chat.id),
+            s"""
+               |Этот номер телефона уже был зарегистрирован пользователем
+               |${
+              uc.get.firstName
+            } ${
+              uc.get.lastName.getOrElse("")
+            }
+               |${
+              uc.get.dateRegistred
+            }
+               |
+               |Вы выбраны представителем компании "${
+              com.get.companyName
+            }", так как
+               |этот номер телефона был указан при составлении контракта.
+               |
+               |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
+               |(комманда /feedback ) указав имя и номер телефона.
+          """.stripMargin)
+        } else {
+          SendMessage(Left(msg.chat.id),
+            s"""
+               |Этот номер телефона уже был зарегистрирован пользователем
+               |${
+              uc.get.firstName
+            } ${
+              uc.get.lastName.getOrElse("")
+            }
+               |${
+              uc.get.dateRegistred
+            }
+               |
+               |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
+               |(комманда /feedback ) указав имя и номер телефона.
+          """.stripMargin)
+        }
+      }
+      else if (com.isDefined) {
+        SendMessage(Left(msg.chat.id),
+          s"""
+             |Поздровляем, вы успешно загестрировались под именем
+             |${
+            contact.firstName
+          } ${
+            contact.lastName.getOrElse("")
+          }
+             |
+             |Вы выбраны представителем компании "${
+            com.get.companyName
+          }", так как
+             |этот номер телефона был указан при составлении контракта.
+             |
+             |Если вы не имеете отношения к этой компании то напишите об этом в поддержку,
+             |(комманда /feedback ) указав имя и номер телефона.
+          """.stripMargin)
+      } else {
+        SendMessage(Left(msg.chat.id),
+          s"""
+             |Поздровляем, вы успешно загестрировались под именем
+             |${
+            contact.firstName
+          } ${
+            contact.lastName.getOrElse("")
+          }
+             |
+             |В нашей базе данных мы не нашли компаний, соответсвующих вашему номеру телефона,
+             |поэтому некоторые функции бота для вас будут недоступны.
+             |
+             |Если являетесь уполномоченым представителем какой-либо компании в нашем реестре,
+             |то напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
+          """.stripMargin)
+      }
+    }
 
   }
 

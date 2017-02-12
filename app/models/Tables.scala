@@ -222,18 +222,23 @@ trait Tables {
   /** Entity class storing rows of table UsersChats
    *  @param id Database column id SqlType(serial), AutoInc, PrimaryKey
    *  @param chatId Database column chat_id SqlType(int4)
-   *  @param username Database column username SqlType(varchar), Length(255,true) */
-  case class UsersChatsRow(id: Int, chatId: Int, username: String)
+   *  @param username Database column username SqlType(varchar), Length(255,true)
+   *  @param telephone Database column telephone SqlType(varchar), Length(15,true)
+   *  @param contragentId Database column contragent_id SqlType(int4), Default(None)
+   *  @param firstName Database column first_name SqlType(varchar), Length(50,true)
+   *  @param lastName Database column last_name SqlType(varchar), Length(50,true), Default(None)
+   *  @param dateRegistred Database column date_registred SqlType(date) */
+  case class UsersChatsRow(id: Int, chatId: Int, username: String, telephone: String, contragentId: Option[Int] = None, firstName: String, lastName: Option[String] = None, dateRegistred: java.sql.Date)
   /** GetResult implicit for fetching UsersChatsRow objects using plain SQL queries */
-  implicit def GetResultUsersChatsRow(implicit e0: GR[Int], e1: GR[String]): GR[UsersChatsRow] = GR{
+  implicit def GetResultUsersChatsRow(implicit e0: GR[Int], e1: GR[String], e2: GR[Option[Int]], e3: GR[Option[String]], e4: GR[java.sql.Date]): GR[UsersChatsRow] = GR{
     prs => import prs._
-    UsersChatsRow.tupled((<<[Int], <<[Int], <<[String]))
+    UsersChatsRow.tupled((<<[Int], <<[Int], <<[String], <<[String], <<?[Int], <<[String], <<?[String], <<[java.sql.Date]))
   }
   /** Table description of table users_chats. Objects of this class serve as prototypes for rows in queries. */
   class UsersChats(_tableTag: Tag) extends Table[UsersChatsRow](_tableTag, "users_chats") {
-    def * = (id, chatId, username) <> (UsersChatsRow.tupled, UsersChatsRow.unapply)
+    def * = (id, chatId, username, telephone, contragentId, firstName, lastName, dateRegistred) <> (UsersChatsRow.tupled, UsersChatsRow.unapply)
     /** Maps whole row to an option. Useful for outer joins. */
-    def ? = (Rep.Some(id), Rep.Some(chatId), Rep.Some(username)).shaped.<>({r=>import r._; _1.map(_=> UsersChatsRow.tupled((_1.get, _2.get, _3.get)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
+    def ? = (Rep.Some(id), Rep.Some(chatId), Rep.Some(username), Rep.Some(telephone), contragentId, Rep.Some(firstName), lastName, Rep.Some(dateRegistred)).shaped.<>({r=>import r._; _1.map(_=> UsersChatsRow.tupled((_1.get, _2.get, _3.get, _4.get, _5, _6.get, _7, _8.get)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
 
     /** Database column id SqlType(serial), AutoInc, PrimaryKey */
     val id: Rep[Int] = column[Int]("id", O.AutoInc, O.PrimaryKey)
@@ -241,6 +246,16 @@ trait Tables {
     val chatId: Rep[Int] = column[Int]("chat_id")
     /** Database column username SqlType(varchar), Length(255,true) */
     val username: Rep[String] = column[String]("username", O.Length(255,varying=true))
+    /** Database column telephone SqlType(varchar), Length(15,true) */
+    val telephone: Rep[String] = column[String]("telephone", O.Length(15,varying=true))
+    /** Database column contragent_id SqlType(int4), Default(None) */
+    val contragentId: Rep[Option[Int]] = column[Option[Int]]("contragent_id", O.Default(None))
+    /** Database column first_name SqlType(varchar), Length(50,true) */
+    val firstName: Rep[String] = column[String]("first_name", O.Length(50,varying=true))
+    /** Database column last_name SqlType(varchar), Length(50,true), Default(None) */
+    val lastName: Rep[Option[String]] = column[Option[String]]("last_name", O.Length(50,varying=true), O.Default(None))
+    /** Database column date_registred SqlType(date) */
+    val dateRegistred: Rep[java.sql.Date] = column[java.sql.Date]("date_registred")
 
     /** Uniqueness Index over (chatId) (database name users_chats_chat_id_uindex) */
     val index1 = index("users_chats_chat_id_uindex", chatId, unique=true)
