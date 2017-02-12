@@ -74,7 +74,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
 
 
-    response.map(x => Ok(toAnswerJson(x, x.methodName))).getOrElse(Ok())
+    response.map(x => Ok(toAnswerJson(x, x.methodName))).getOrElse(Ok("success"))
   }
 
   def start(msg: Message) = {
