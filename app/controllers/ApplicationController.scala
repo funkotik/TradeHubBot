@@ -6,7 +6,7 @@ import javax.inject.{Inject, Singleton}
 import telegram._
 import com.ning.http.client.{AsyncCompletionHandler, AsyncHttpClient, Response}
 import com.ning.http.client.multipart.StringPart
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.{JsString, JsValue, Json}
 import play.api.libs.ws.{WSClient, WSResponse}
 import com.ning.http.client.multipart.FilePart
 import org.json4s
@@ -82,13 +82,15 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def create_bid(msg: Message): SendMessage = {
+    val cbDataSell = Json.obj("value" -> "sell", "command" -> "create_bid").toString()
+    val cbDataBuy = Json.obj("value" -> "buy", "command" -> "create_bid").toString()
     val buttons = Seq(
       Seq(
-        KeyboardButton("Заявка на покупку"),
-        KeyboardButton("Заявка на продажу")
+        InlineKeyboardButton("Заявка на покупку", callbackData = Some(cbDataBuy)),
+        InlineKeyboardButton("Заявка на продажу", callbackData = Some(cbDataSell))
       )
     )
-    val keyboard = ReplyKeyboardMarkup(buttons, oneTimeKeyboard = Some(true))
+    val keyboard = InlineKeyboardMarkup(buttons)
     SendMessage(Left(msg.chat.id), "Какой тип заявки вы хотите составить?", replyMarkup = Some(keyboard))
   }
 
