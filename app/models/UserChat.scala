@@ -24,7 +24,7 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
   val userChats = Tables.UsersChats
   val contracts = Tables.Contracts
   val commodities = Tables.Commodities
-
+  val companies = Tables.Companies
 
   import dbConfig.driver.api._
 
@@ -40,18 +40,34 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
   def getUserCommodities(userId: Long, isSell: Boolean): Future[Seq[(Int, String)]] = {
     val query = for {
       (comm, _) <- {
-          if (isSell)
-            userChats join
-              contracts on (_.contragentId === _.producerId) join
-              commodities on (_._2.commodityId === _.commodityId) groupBy(_._2)
-          else
-            userChats join
-              contracts on (_.contragentId === _.consumerId) join
-              commodities on (_._2.commodityId === _.commodityId) groupBy(_._2)
-        }
-      } yield (comm.commodityId, comm.name)
+        if (isSell)
+          userChats join
+            contracts on (_.contragentId === _.producerId) join
+            commodities on (_._2.commodityId === _.commodityId) groupBy (_._2)
+        else
+          userChats join
+            contracts on (_.contragentId === _.consumerId) join
+            commodities on (_._2.commodityId === _.commodityId) groupBy (_._2)
+      }
+    } yield (comm.commodityId, comm.name)
 
     db.run(query.result)
+  }
 
+  def getPartners(userId: Long, commodityId: Int, isSell: Boolean): Future[Seq[(Int, String)]] = {
+    val query = for {
+      ((usr, cont), com) <- {
+        if (isSell)
+          userChats join
+            contracts on (_.contragentId === _.producerId) join
+            companies on (_._2.consumerId === _.companyId)
+        else
+          userChats join
+            contracts on (_.contragentId === _.consumerId) join
+            companies on (_._2.consumerId === _.companyId)
+      }
+    } yield (com.companyId, com.companyName)
+
+    db.run(query.result)
   }
 }

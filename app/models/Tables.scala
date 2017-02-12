@@ -85,18 +85,18 @@ trait Tables {
    *  @param bankAccount Database column bank_account SqlType(varchar), Length(20,true)
    *  @param `e-mail` Database column e-mail SqlType(varchar), Length(256,true)
    *  @param telephone Database column telephone SqlType(varchar), Length(50,true)
-   *  @param companyName Database column company_name SqlType(varchar), Length(255,true), Default(None) */
-  case class CompaniesRow(companyId: Int, idNumber: String, directorName: Option[String] = None, bankAccount: String, `e-mail`: String, telephone: String, companyName: Option[String] = None)
+   *  @param companyName Database column company_name SqlType(varchar), Length(255,true) */
+  case class CompaniesRow(companyId: Int, idNumber: String, directorName: Option[String] = None, bankAccount: String, `e-mail`: String, telephone: String, companyName: String)
   /** GetResult implicit for fetching CompaniesRow objects using plain SQL queries */
   implicit def GetResultCompaniesRow(implicit e0: GR[Int], e1: GR[String], e2: GR[Option[String]]): GR[CompaniesRow] = GR{
     prs => import prs._
-    CompaniesRow.tupled((<<[Int], <<[String], <<?[String], <<[String], <<[String], <<[String], <<?[String]))
+    CompaniesRow.tupled((<<[Int], <<[String], <<?[String], <<[String], <<[String], <<[String], <<[String]))
   }
   /** Table description of table companies. Objects of this class serve as prototypes for rows in queries. */
   class Companies(_tableTag: Tag) extends Table[CompaniesRow](_tableTag, "companies") {
     def * = (companyId, idNumber, directorName, bankAccount, `e-mail`, telephone, companyName) <> (CompaniesRow.tupled, CompaniesRow.unapply)
     /** Maps whole row to an option. Useful for outer joins. */
-    def ? = (Rep.Some(companyId), Rep.Some(idNumber), directorName, Rep.Some(bankAccount), Rep.Some(`e-mail`), Rep.Some(telephone), companyName).shaped.<>({r=>import r._; _1.map(_=> CompaniesRow.tupled((_1.get, _2.get, _3, _4.get, _5.get, _6.get, _7)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
+    def ? = (Rep.Some(companyId), Rep.Some(idNumber), directorName, Rep.Some(bankAccount), Rep.Some(`e-mail`), Rep.Some(telephone), Rep.Some(companyName)).shaped.<>({r=>import r._; _1.map(_=> CompaniesRow.tupled((_1.get, _2.get, _3, _4.get, _5.get, _6.get, _7.get)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
 
     /** Database column company_id SqlType(serial), AutoInc, PrimaryKey */
     val companyId: Rep[Int] = column[Int]("company_id", O.AutoInc, O.PrimaryKey)
@@ -110,8 +110,8 @@ trait Tables {
     val `e-mail`: Rep[String] = column[String]("e-mail", O.Length(256,varying=true))
     /** Database column telephone SqlType(varchar), Length(50,true) */
     val telephone: Rep[String] = column[String]("telephone", O.Length(50,varying=true))
-    /** Database column company_name SqlType(varchar), Length(255,true), Default(None) */
-    val companyName: Rep[Option[String]] = column[Option[String]]("company_name", O.Length(255,varying=true), O.Default(None))
+    /** Database column company_name SqlType(varchar), Length(255,true) */
+    val companyName: Rep[String] = column[String]("company_name", O.Length(255,varying=true))
   }
   /** Collection-like TableQuery object for table Companies */
   lazy val Companies = new TableQuery(tag => new Companies(tag))
@@ -256,9 +256,6 @@ trait Tables {
     val lastName: Rep[Option[String]] = column[Option[String]]("last_name", O.Length(50,varying=true), O.Default(None))
     /** Database column date_registred SqlType(date) */
     val dateRegistred: Rep[java.sql.Date] = column[java.sql.Date]("date_registred")
-
-    /** Uniqueness Index over (chatId) (database name users_chats_chat_id_uindex) */
-    val index1 = index("users_chats_chat_id_uindex", chatId, unique=true)
   }
   /** Collection-like TableQuery object for table UsersChats */
   lazy val UsersChats = new TableQuery(tag => new UsersChats(tag))

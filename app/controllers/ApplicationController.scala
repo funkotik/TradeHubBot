@@ -87,6 +87,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           case Some((cbCom, cbVal)) =>
             cbCom match {
               case "c_b1" => create_bid_choose_commodity(cbq.from.id, cbVal)
+              case "c_b2" => create_bid_choose_partner(cbq.from.id, cbVal)
             }
           case _ => Future successful errorMsg(cbq.from.id)
 
@@ -145,7 +146,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       val buttons =
         commSeq.map(c =>
           Seq(
-            InlineKeyboardButton(c._2, Some(s"c_b2;${c._1.toString}$value"))
+            InlineKeyboardButton(c._2, Some(s"c_b2;${c._1.toString}:$value"))
           )
         )
 
@@ -157,6 +158,28 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     }
 
 
+  }
+
+  def create_bid_choose_partner(chatId: Long, value: String): Future[SendMessage] = {
+
+    value.split(":") match {
+      case Array(commId, t) =>
+        userChat.getPartners(chatId, commId.toInt, t == "s").map {
+          comSeq =>
+            val buttons =
+              comSeq.map(c =>
+                Seq(
+                  InlineKeyboardButton(c._2, Some(s"c_b2;${c._1}:$commId:$value"))
+                )
+              )
+
+            val keyboard = InlineKeyboardMarkup(buttons)
+            SendMessage(Left(chatId),
+              s"Выберите компанию для сотрудничетсва",
+              replyMarkup = Some(keyboard)
+            )
+        }
+    }
   }
 
   def store_contact(chatId: Long, contact: Contact): Future[SendMessage] = {
@@ -185,7 +208,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                  |${uc.get.firstName} ${uc.get.lastName.getOrElse("")}
                  |${uc.get.dateRegistred}
                  |
-                 |Вы выбраны представителем компании "${com.get.companyName.getOrElse("")}", так как
+                 |Вы выбраны представителем компании "${com.get.companyName}", так как
                  |этот номер телефона был указан при составлении контракта.
                  |
                  |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
@@ -212,7 +235,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                |Поздровляем, вы успешно загестрировались под именем
                |${contact.firstName} ${contact.lastName.getOrElse("")}
                |
-               |Вы выбраны представителем компании "${com.get.companyName.getOrElse("")}", так как
+               |Вы выбраны представителем компании "${com.get.companyName}", так как
                |этот номер телефона был указан при составлении контракта.
                |
              |Если вы не имеете отношения к этой компании то напишите об этом в поддержку,
