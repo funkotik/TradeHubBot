@@ -25,7 +25,7 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
   import dbConfig.driver.api._
 
   def get(tel: String): Future[Option[UsersChatsRow]] =
-    db.run(userChats.filter(_.telephone === tel).result.headOption)
+    db.run(userChats.filter(_.telephone.like(s"%$tel%")).result.headOption)
 
   def insert(user: UsersChatsRow): Future[Int] =
     db.run(userChats returning userChats.map(_.id) += user)

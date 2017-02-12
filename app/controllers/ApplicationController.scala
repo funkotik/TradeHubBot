@@ -166,7 +166,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                  |${uc.get.firstName} ${uc.get.lastName.getOrElse("")}
                  |${uc.get.dateRegistred}
                  |
-                 |Вы выбраны представителем компании "${com.get.companyName}", так как
+                 |Вы выбраны представителем компании "${com.get.companyName.getOrElse("")}", так как
                  |этот номер телефона был указан при составлении контракта.
                  |
                  |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
@@ -194,7 +194,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                |Поздровляем, вы успешно загестрировались под именем
                |${contact.firstName} ${contact.lastName.getOrElse("")}
                |
-               |Вы выбраны представителем компании "${com.get.companyName.getOrElse("")}, так как
+               |Вы выбраны представителем компании "${com.get.companyName.getOrElse("")}", так как
                |этот номер телефона был указан при составлении контракта.
                |
              |Если вы не имеете отношения к этой компании то напишите об этом в поддержку,
