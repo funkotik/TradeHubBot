@@ -215,15 +215,12 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           )
         }
       } else {
-        Future {
-          SendMessage(Left(msg.chat.id),
-            """
-              |Возникла проблема.
-              |Пожалуйста, напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
-            """.stripMargin
-          )
-
-        }
+        SendMessage(Left(msg.chat.id),
+          """
+            |Возникла проблема.
+            |Пожалуйста, напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
+          """.stripMargin
+        )
       }
     }
 
