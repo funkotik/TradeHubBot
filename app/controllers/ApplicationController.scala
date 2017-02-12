@@ -46,7 +46,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   def toAnswer[T](t: T, method: String): String =
     compact(
       render4s((Extraction.decompose(t) ++
-      new JObject(List("method_name" -> JString(method)))).underscoreKeys)
+      new JObject(List("method" -> JString(method)))).underscoreKeys)
     )
 
   def fromJson[T: Manifest](json: String): T = parse4s(json).camelizeKeys.extract[T]
@@ -63,7 +63,6 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     val response = update.message map {x =>
       SendMessage(Left(x.chat.id), "Пока что я слишком слаб чтобы понять это")
     }
-    println(response.get)
     println(toAnswer(response.get, response.get.methodName))
     Ok(toAnswer(response.get, response.get.methodName))
   }
