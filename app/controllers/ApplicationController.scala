@@ -67,10 +67,12 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     val response = update.message map { msg =>
       val command = getCommand(msg)
       val callbackData = update.callbackQuery.map(x =>
-        Json.parse(x.data.getOrElse("")).as[JsObject].value
-      ).flatMap { data =>
-        data.get("command").map(_.toString()).zip(data.get("value").map(_.toString())).headOption
-      }
+        x.data.map(_.split(";")) flatMap {
+          case Array(c, v) => Some(c, v)
+          case _ => None
+        }
+      )
+
       println(callbackData)
       command match {
         case Some("/start") => start(msg)
@@ -79,7 +81,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           callbackData match {
             case Some((cbCom, cbVal)) =>
               cbCom match {
-                case "create_bid" => create_bid_choose_commodity(msg, cbVal)
+                case "c_b1" => create_bid_choose_commodity(msg, cbVal)
               }
             case _ =>
               msg.contact match {
@@ -119,12 +121,10 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def create_bid(msg: Message): Future[SendMessage] = {
-    val cbDataSell = Json.obj("value" -> "sell", "command" -> "create_bid").toString()
-    val cbDataBuy = Json.obj("value" -> "buy", "command" -> "create_bid").toString()
     val buttons = Seq(
       Seq(
-        InlineKeyboardButton("Заявка на покупку", callbackData = Some(cbDataBuy)),
-        InlineKeyboardButton("Заявка на продажу", callbackData = Some(cbDataSell))
+        InlineKeyboardButton("Заявка на покупку", callbackData = Some("c_b1;b")),
+        InlineKeyboardButton("Заявка на продажу", callbackData = Some("c_b1;s"))
       )
     )
     val keyboard = InlineKeyboardMarkup(buttons)
