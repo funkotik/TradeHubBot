@@ -63,9 +63,14 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     val response = update.message map {x =>
       SendMessage(Left(x.chat.id), "Пока что я слишком слаб чтобы понять это")
     }
-    println(toAnswer(response.get, response.get.methodName))
-    Ok(toAnswer(response.get, response.get.methodName))
+    println(toAnswer(response.get, "sendMessage"))
+    Ok(toAnswer(response.get, "sendMessage"))
   }
+
+  def sendMessage = {
+
+  }
+
 
   def setWebhook = {
 
