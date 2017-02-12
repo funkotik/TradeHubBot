@@ -62,44 +62,53 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def inbox = Action.async { request =>
+
     val js = request.body.asJson.get
     val update = fromJson[Update](js.toString)
-    val response = update.message map { msg =>
-      val command = getCommand(msg)
-      val callbackData = update.callbackQuery.flatMap { x =>
-        println(x.data)
-        x.data.map(_.split(";")) flatMap {
+
+    val response = (update.message, update.callbackQuery) match {
+      case (Some(msg), None) =>
+        val command = getCommand(msg)
+        command match {
+          case Some("/start") => start(msg.chat.id)
+          case Some("/create_bid") => create_bid(msg.chat.id)
+          case _ => msg.contact match {
+            case Some(x) => store_contact(msg.chat.id, x)
+            case None => Future successful errorMsg(msg.chat.id)
+          }
+        }
+
+      case (None, Some(cbq)) =>
+        println(cbq.data)
+        val callbackData = cbq.data.map(_.split(";")) flatMap {
           case Array(c, v) => Some((c, v))
           case _ => None
         }
-      }
+        println(callbackData)
 
-      println(callbackData)
-      command match {
-        case Some("/start") => start(msg)
-        case Some("/create_bid") => create_bid(msg)
-        case _ =>
-          callbackData match {
-            case Some((cbCom, cbVal)) =>
-              cbCom match {
-                case "c_b1" => create_bid_choose_commodity(msg, cbVal)
-              }
-            case _ =>
-              msg.contact match {
-                case Some(x) => store_contact(msg, x)
-                case None =>
-                  Future {
-                    SendMessage(Left(msg.chat.id), "Пока что я слишком слаб чтобы понять это")
-                  }
-              }
-          }
-      }
+        callbackData match {
+          case Some((cbCom, cbVal)) =>
+            cbCom match {
+              case "c_b1" => create_bid_choose_commodity(cbq.from.id, cbVal)
+            }
+          case _ => Future successful errorMsg(cbq.from.id)
+
+        }
+
     }
-
-    response.map(_.map(x => Ok(toAnswerJson(x, x.methodName)))).getOrElse(Future.successful(Ok("success")))
+    response.map(x => Ok(toAnswerJson(x, x.methodName)))
   }
 
-  def start(msg: Message): Future[SendMessage] = {
+  def errorMsg(chatId: Long) = {
+    SendMessage(Left(chatId),
+      """
+        |Возникла проблема.
+        |Пожалуйста, напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
+      """.stripMargin
+    )
+  }
+
+  def start(chatId: Long): Future[SendMessage] = {
     val buttons = Seq(
       Seq(
         KeyboardButton("Поделиться номером телефона", requestContact = Some(true))
@@ -107,21 +116,20 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     )
     val keyboard = ReplyKeyboardMarkup(buttons, oneTimeKeyboard = Some(true))
 
-    Future {
-      SendMessage(Left(msg.chat.id),
+    Future successful {
+      SendMessage(Left(chatId),
         """
           |Я брокер-бот, мониторю торговые площадки, делаю прогнозы рынков,
           |помогаю заключить контракт, организовываю торговые коммуникации.
           |
           |Для продожения мне необходим ваш номер телефона, его вы мне можете предоставить,
           |просто кликнув по кнопке снизу.
-        """.
-          stripMargin,
+        """.stripMargin,
         replyMarkup = Some(keyboard))
     }
   }
 
-  def create_bid(msg: Message): Future[SendMessage] = {
+  def create_bid(chatId: Long): Future[SendMessage] = {
     val buttons = Seq(
       Seq(
         InlineKeyboardButton("Заявка на покупку", callbackData = Some("c_b1;b")),
@@ -129,20 +137,20 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       )
     )
     val keyboard = InlineKeyboardMarkup(buttons)
-    Future {
-      SendMessage(Left(msg.chat.id), "Какой тип заявки вы хотите составить?", replyMarkup = Some(keyboard))
+    Future successful {
+      SendMessage(Left(chatId), "Какой тип заявки вы хотите составить?", replyMarkup = Some(keyboard))
     }
   }
 
-  def create_bid_choose_commodity(msg: Message, value: String): Future[SendMessage] = {
-    Future {
-      SendMessage(Left(msg.chat.id),
+  def create_bid_choose_commodity(chatId: Long, value: String): Future[SendMessage] = {
+    Future successful {
+      SendMessage(Left(chatId),
         "Я брокер-бот, мониторю торговые площадки, делаю прогнозы рынков," +
           " помогаю заключить контракт, организовываю торговые коммуникации")
     }
   }
 
-  def store_contact(msg: Message, contact: Contact): Future[SendMessage] = {
+  def store_contact(chatId: Long, contact: Contact): Future[SendMessage] = {
 
     for {
       uc <- userChat.get(contact.phoneNumber)
@@ -151,7 +159,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         userChat.del(uc.map(_.id).getOrElse(-1)).flatMap { _ =>
           val newUser =
             UsersChatsRow(
-              0, msg.chat.id.toInt, "", contact.phoneNumber, com.map(_.companyId), contact.firstName,
+              0, chatId.toInt, "", contact.phoneNumber, com.map(_.companyId), contact.firstName,
               contact.lastName, new DateSQL(new Date().getTime)
             )
           println(newUser)
@@ -162,7 +170,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       if (insertRes >= 0) {
         if (uc.isDefined) {
           if (com.isDefined) {
-            SendMessage(Left(msg.chat.id),
+            SendMessage(Left(chatId),
               s"""
                  |Этот номер телефона уже был зарегистрирован пользователем
                  |${uc.get.firstName} ${uc.get.lastName.getOrElse("")}
@@ -177,8 +185,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                 stripMargin
             )
           } else {
-            SendMessage(Left(msg.
-              chat.id),
+            SendMessage(Left(chatId),
               s"""
                  |Этот номер телефона уже был зарегистрирован пользователем
                  |${uc.get.firstName} ${uc.get.lastName.getOrElse("")}
@@ -191,7 +198,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           }
         }
         else if (com.isDefined) {
-          SendMessage(Left(msg.chat.id),
+          SendMessage(Left(chatId),
             s"""
                |Поздровляем, вы успешно загестрировались под именем
                |${contact.firstName} ${contact.lastName.getOrElse("")}
@@ -203,7 +210,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                |(комманда /feedback ) указав имя и номер телефона.
           """.stripMargin)
         } else {
-          SendMessage(Left(msg.chat.id),
+          SendMessage(Left(chatId),
             s"""
                |Поздровляем, вы успешно загестрировались под именем
                |${contact.firstName} ${contact.lastName.getOrElse("")}
@@ -217,12 +224,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           )
         }
       } else {
-        SendMessage(Left(msg.chat.id),
-          """
-            |Возникла проблема.
-            |Пожалуйста, напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
-          """.stripMargin
-        )
+        errorMsg(chatId)
       }
     }
 
