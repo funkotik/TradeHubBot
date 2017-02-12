@@ -24,7 +24,6 @@ import org.json4s.ext.EnumNameSerializer
 import org.json4s.jackson.Json4sModule
 
 
-
 //@Singleton
 class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration)
                                      (implicit val exc: ExecutionContext)
@@ -33,7 +32,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   val url = s"https://api.telegram.org/bot${conf.getString("token").get}"
 
-  val webhookStatus: Future[Unit] = setWebhook.map{ x =>
+  val webhookStatus: Future[Unit] = setWebhook.map { x =>
     println(x.body)
   }
 
@@ -46,47 +45,57 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   def toAnswerJson[T](t: T, method: String): JsValue =
     Json.parse(
       compact(
-      render4s(new JObject(Extraction.decompose(t).asInstanceOf[JObject].obj ++
-        List("method" -> JString(method))).underscoreKeys)
-    )
+        render4s(new JObject(Extraction.decompose(t).asInstanceOf[JObject].obj ++
+          List("method" -> JString(method))).underscoreKeys)
+      )
     )
 
   def fromJson[T: Manifest](json: String): T = parse4s(json).camelizeKeys.extract[T]
 
 
-  def index = Action {request =>
+  def index = Action { request =>
     Ok("lol")
   }
 
   def inbox = Action { request =>
     val js = request.body.asJson.get
     val update = fromJson[Update](js.toString)
-    val response = update.message map {msg =>
+    val response = update.message map { msg =>
       val command = getCommand(msg)
       println(command)
       command match {
-
         case Some("/start") => start(msg)
+        case Some("/create_bid") => create_bid(msg)
         case _ => SendMessage(Left(msg.chat.id), "Пока что я слишком слаб чтобы понять это")
       }
 
     }
 
 
-
     response.map(x => Ok(toAnswerJson(x, x.methodName))).getOrElse(Ok("success"))
   }
 
-  def start(msg: Message) = {
+  def start(msg: Message): SendMessage = {
     SendMessage(Left(msg.chat.id),
       "Я брокер-бот, мониторю торговые площадки, делаю прогнозы рынков," +
-      " помогаю заключить контракт, организовываю торговые коммуникации")
+        " помогаю заключить контракт, организовываю торговые коммуникации")
+  }
+
+  def create_bid(msg: Message): SendMessage = {
+    val buttons = Seq(
+      Seq(
+        KeyboardButton("Заявка на покупку"),
+        KeyboardButton("Заявка на продажу")
+      )
+    )
+    val keyboard = ReplyKeyboardMarkup(buttons, oneTimeKeyboard = Some(true))
+    SendMessage(Left(msg.chat.id), "Какой тип заявки вы хотите составить?", replyMarkup = Some(keyboard))
   }
 
   def getCommand(msg: Message): Option[String] = {
     msg.entities.getOrElse(Seq()).find { me =>
       me.`type` == "bot_command" && me.offset == 0
-    }.flatMap{me =>
+    }.flatMap { me =>
       msg.text.map(_.slice(0, me.length))
     }
   }
