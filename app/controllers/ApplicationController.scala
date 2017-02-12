@@ -66,9 +66,9 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     val update = fromJson[Update](js.toString)
     val response = update.message map { msg =>
       val command = getCommand(msg)
-      val callbackData = update.callbackQuery.map(x =>
+      val callbackData = update.callbackQuery.flatMap(x =>
         x.data.map(_.split(";")) flatMap {
-          case Array(c, v) => Some(c, v)
+          case Array(c, v) => Some((c, v))
           case _ => None
         }
       )
