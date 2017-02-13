@@ -207,6 +207,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
       .map {
         case ((s, b), u) =>
+          println(u)
           if (u.flatMap(_.contragentId).isDefined) {
             if (s.isEmpty && b.isEmpty)
               SendMessage(Left(chatId), "Рамковых договоров для вашей компании не найдено!")
