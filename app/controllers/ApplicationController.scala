@@ -137,21 +137,18 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     val contIdOpt = repliedMsg.text.flatMap(x =>
       Try {
         val s = "Номер в реестре: [0-9]*".r.findFirstIn(x).get
-        println(s)
         s.substring(17, s.length).toInt
       }.toOption
     )
     val tOpt = repliedMsg.text.flatMap(x =>
       Try {
         val s = "Вы выступаете в роли .*".r.findFirstIn(x).get
-        println(s)
         if (s.substring(21, s.length) == "продавца")
           "s"
         else
           "b"
       }.toOption
     )
-    println(contIdOpt, tOpt)
     (contIdOpt, tOpt, msg.from) match {
       case (Some(contId), Some(t), Some(usr)) if t == "b" || t == "s" =>
         contract.get(contId).flatMap(
@@ -159,16 +156,13 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             val newBid = BidsRow(0, if (t == "b") cont.consumerId else cont.producerId,
               t == "s", cont.commodityId, msg.text.getOrElse("Подробности отсутствуют"))
             bid.insert(newBid).flatMap{r =>
-              println(r)
               if (r > 0) {
                 userChat.get(if (t == "b") cont.producerId else cont.consumerId).flatMap(
                   _.map { partner =>
-                    println(partner)
                     val keyboard = InlineKeyboardMarkup(
                       Seq(Seq(InlineKeyboardButton("Принять предложение", Some(s"c_b4;$contId"))))
                     )
                     val partMsg = contract.getInfo(cont.contractId).flatMap(_.map { info =>
-                      println(info)
                       sendMessageToChat(
                         SendMessage(
                           Left(partner.chatId.toLong),
@@ -181,7 +175,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                              |
                              |С такими условиями:
                              |${msg.text.getOrElse("Подробности отсутствуют")}
-                        """.stripMargin
+                        """.stripMargin,
+                          replyMarkup = Some(keyboard)
                         )
                       )
                     }.getOrElse(Future successful false)
@@ -394,11 +389,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def sendMessageToChat(sendMsg: SendMessage): Future[Boolean] = {
-    println(toJson(sendMsg))
-    println(Json.parse(toJson(sendMsg).toString))
-    val res = ws.url(url + "/sendMessage").post(Json.parse(toJson(sendMsg).toString))
-    res.map(x => println(x.body, x.status))
-    res.map(_.status == 200)
+    ws.url(url + "/sendMessage")
+      .post(Json.parse(toJson(sendMsg).toString)).map(_.status == 200)
   }
 
   def errorMsg(chatId: Long): SendMessage = {
