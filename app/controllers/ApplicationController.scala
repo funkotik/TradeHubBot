@@ -158,14 +158,17 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           _.map { cont =>
             val newBid = BidsRow(0, if (t == "b") cont.consumerId else cont.producerId,
               t == "s", cont.commodityId, msg.text.getOrElse("Подробности отсутствуют"))
-            bid.insert(newBid).flatMap(r =>
+            bid.insert(newBid).flatMap{r =>
+              println(r)
               if (r > 0) {
                 userChat.get(if (t == "b") cont.producerId else cont.consumerId).flatMap(
                   _.map { partner =>
+                    println(partner)
                     val keyboard = InlineKeyboardMarkup(
                       Seq(Seq(InlineKeyboardButton("Принять предложение", Some(s"c_b4;$contId"))))
                     )
                     val partMsg = contract.getInfo(cont.contractId).flatMap(_.map { info =>
+                      println(info)
                       sendMessageToChat(
                         SendMessage(
                           Left(partner.chatId.toLong),
@@ -192,7 +195,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                   }.getOrElse(Future successful errorMsg(chatId))
                 )
               } else Future successful errorMsg(chatId)
-            )
+          }
           }.getOrElse(Future successful errorMsg(chatId))
         )
       case _ => Future successful errorMsg(chatId)
