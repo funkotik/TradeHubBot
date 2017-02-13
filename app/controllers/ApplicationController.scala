@@ -62,6 +62,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           case Some("/start") => start(msg.chat.id)
           case Some("/create_bid") if msg.from.isDefined =>
             create_bid_message(msg.chat.id, msg.from.get.id)
+          case Some("/feedback") =>
+            feedback_message(msg.chat.id)
           case _ =>
             msg.replyToMessage match {
               case Some(x) => create_bid(msg.chat.id, msg, x)
@@ -133,6 +135,16 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         """.stripMargin,
         replyMarkup = Some(keyboard))
     }
+  }
+
+  def feedback_message(chatId: Long): Future[SendMessage] = {
+    val mkp = ForceReply()
+    Future successful SendMessage(Left(chatId),
+      """
+        |Напишите пожалуйста ваш отзыв или предложение.
+      """.stripMargin,
+      replyMarkup = Some(mkp)
+    )
   }
 
   def create_bid(chatId: Long, msg: Message, repliedMsg: Message): Future[SendMessage] = {
