@@ -102,8 +102,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case Failure(_) =>
         Future successful false
     }
-    res.map{r =>
-      if(r)
+    res.map { r =>
+      if (r)
         SendMessage(Left(chatId), "В скором времени с вами свяжется коммерческий представитель")
       else
         errorMsg(chatId)
@@ -156,7 +156,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case (Some(contId), Some(t), Some(usr)) if t == "b" || t == "s" =>
         contract.get(contId).flatMap(
           _.map { cont =>
-            val newBid = BidsRow(0, usr.id, t == "s", cont.commodityId, msg.text.getOrElse("Подробности отсутствуют"))
+            val newBid = BidsRow(0, if (t == "b") cont.consumerId else cont.producerId,
+              t == "s", cont.commodityId, msg.text.getOrElse("Подробности отсутствуют"))
             bid.insert(newBid).flatMap(r =>
               if (r > 0) {
                 userChat.get(if (t == "b") cont.producerId else cont.consumerId).flatMap(
@@ -183,7 +184,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                     }.getOrElse(Future successful false)
                     )
                     partMsg.map(x =>
-                      if(x)
+                      if (x)
                         SendMessage(Left(chatId), "Предложение принято и выслано вашим партнерам")
                       else
                         errorMsg(chatId)
