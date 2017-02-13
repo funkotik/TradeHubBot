@@ -35,4 +35,7 @@ class Contract @Inject()(dbConfigProvider: DatabaseConfigProvider)
 
     db.run(query.result.headOption)
   }
+
+  def get(contId: Int): Future[Option[ContractsRow]] =
+    db.run(contracts.filter(_.contractId === contId).result.headOption)
 }

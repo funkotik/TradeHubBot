@@ -5,11 +5,11 @@ import java.sql.{Date => DateSQL}
 import java.util.Date
 import javax.inject.Inject
 
-import models.Tables.UsersChatsRow
+import models.Tables.{BidsRow, UsersChatsRow}
 import models._
 import telegram._
 import org.asynchttpclient.{AsyncCompletionHandler, AsyncHttpClient, Response}
-import play.api.libs.json.{JsObject, JsValue, Json}
+import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import play.api.libs.ws.{WSClient, WSResponse}
 import org.asynchttpclient.request.body.multipart.{FilePart, StringPart}
 
@@ -46,19 +46,6 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     new EnumNameSerializer(ChatAction) +
     new EnumNameSerializer(ParseMode)
 
-  def toJson[T](t: T): String = compact(render4s(Extraction.decompose(t).underscoreKeys))
-
-  def toAnswerJson[T](t: T, method: String): JsValue =
-    Json.parse(
-      compact(
-        render4s(new JObject(Extraction.decompose(t).asInstanceOf[JObject].obj ++
-          List("method" -> JString(method))).underscoreKeys)
-      )
-    )
-
-  def fromJson[T: Manifest](json: String): T = parse4s(json).camelizeKeys.extract[T]
-
-
   def index = Action {
     Ok("Выкатывай")
   }
@@ -73,7 +60,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         val command = getCommand(msg)
         command match {
           case Some("/start") => start(msg.chat.id)
-          case Some("/create_bid") => create_bid_message(msg.chat.id)
+          case Some("/create_bid") if msg.from.isDefined =>
+            create_bid_message(msg.chat.id, msg.from.get.id)
           case _ =>
             msg.replyToMessage match {
               case Some(x) => create_bid(msg.chat.id, msg, x)
@@ -96,6 +84,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
               case "c_b1" => create_bid_choose_commodity(cbq.from.id, cbVal)
               case "c_b2" => create_bid_choose_partner(cbq.from.id, cbVal)
               case "c_b3" => create_bid_ask_conditions(cbq.from.id, cbVal)
+              case "c_b4" => sendToExternal(cbq.from.id, cbVal)
             }
           case _ => Future successful errorMsg(cbq.from.id)
 
@@ -103,6 +92,22 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
     }
     response.map(x => Ok(toAnswerJson(x, x.methodName)))
+  }
+
+  def sendToExternal(chatId: Long, value: String): Future[SendMessage] = {
+    val res = Try(value.toInt) match {
+      case Success(cId) =>
+        ws.url("http://159.203.169.25/bot/webhook")
+          .post(Json.obj("contract_id" -> JsNumber(cId))).map(_.status == 200)
+      case Failure(_) =>
+        Future successful false
+    }
+    res.map{r =>
+      if(r)
+        SendMessage(Left(chatId), "В скором времени с вами свяжется коммерческий представитель")
+      else
+        errorMsg(chatId)
+    }
   }
 
   def start(chatId: Long): Future[SendMessage] = {
@@ -127,6 +132,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def create_bid(chatId: Long, msg: Message, repliedMsg: Message): Future[SendMessage] = {
+    println(repliedMsg.text)
+
     val contIdOpt = repliedMsg.text.flatMap(x =>
       Try {
         val s = "Номер в реестре: _[0-9]*_".r.findFirstIn(x).get
@@ -134,38 +141,101 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         s.substring(18, s.length - 1).toInt
       }.toOption
     )
-    val t = repliedMsg.text.flatMap(x =>
+    val tOpt = repliedMsg.text.flatMap(x =>
       Try {
         val s = "Вы выступаете в роли _.*_".r.findFirstIn(x).get
         println(s)
-        if(s.substring(22, s.length - 1) == "продавца")
+        if (s.substring(22, s.length - 1) == "продавца")
           "s"
         else
           "b"
       }.toOption
     )
 
-    println(contIdOpt, t)
+    (contIdOpt, tOpt, msg.from) match {
+      case (Some(contId), Some(t), Some(usr)) if t == "b" || t == "s" =>
+        contract.get(contId).flatMap(
+          _.map { cont =>
+            val newBid = BidsRow(0, usr.id, t == "s", cont.commodityId, msg.text.getOrElse("Подробности отсутствуют"))
+            bid.insert(newBid).flatMap(r =>
+              if (r > 0) {
+                userChat.get(if (t == "b") cont.producerId else cont.consumerId).flatMap(
+                  _.map { partner =>
+                    val keyboard = InlineKeyboardMarkup(
+                      Seq(Seq(InlineKeyboardButton("Принять предложение", Some(s"c_b4;$contId"))))
+                    )
+                    val partMsg = contract.getInfo(cont.contractId).flatMap(_.map { info =>
+                      sendMessageToChat(
+                        SendMessage(
+                          Left(partner.chatId.toLong),
+                          s"""
+                             |Поступила заявка от ваших партнеров, компании ${if (t == "b") info._3 else info._4}
+                             |Контракт №${info._1}
+                             |Товар: ${info._2}
+                             |Покупатель: ${info._3}
+                             |Поставщик: ${info._4}
+                             |
+                             |С такими условиями:
+                             |${msg.text.getOrElse("Подробности отсутствуют")}
+                        """.stripMargin
+                        )
+                      )
+                    }.getOrElse(Future successful false)
+                    )
+                    partMsg.map(x =>
+                      if(x)
+                        SendMessage(Left(chatId), "Предложение принято и выслано вашим партнерам")
+                      else
+                        errorMsg(chatId)
+                    )
+                  }.getOrElse(Future successful errorMsg(chatId))
+                )
+              } else Future successful errorMsg(chatId)
+            )
+          }.getOrElse(Future successful errorMsg(chatId))
+        )
+      case _ => Future successful errorMsg(chatId)
+    }
 
-    Future successful SendMessage(Left(chatId),
-      """
-        |Поздравляем, ваша заявка оформлена и передана вашим партнерам.
-      """.stripMargin
-    )
 
   }
 
-  def create_bid_message(chatId: Long): Future[SendMessage] = {
-    val buttons = Seq(
-      Seq(
-        InlineKeyboardButton("Заявка на покупку", callbackData = Some("c_b1;b")),
-        InlineKeyboardButton("Заявка на продажу", callbackData = Some("c_b1;s"))
-      )
-    )
-    val keyboard = InlineKeyboardMarkup(buttons)
-    Future successful {
-      SendMessage(Left(chatId), "Какой тип заявки вы хотите составить?", replyMarkup = Some(keyboard))
-    }
+  def create_bid_message(chatId: Long, userId: Long): Future[SendMessage] = {
+    userChat.getUserCommodities(userId, isSell = true).zip(
+      userChat.getUserCommodities(userId, isSell = false)
+    ).zip(userChat.get(chatId))
+
+      .map {
+        case ((s, b), u) =>
+          if (u.flatMap(_.contragentId).isDefined) {
+            if (s.isEmpty && b.isEmpty)
+              SendMessage(Left(chatId), "Рамковых договоров для вашей компании не найдено!")
+            else {
+              val buttons = Seq(
+                Seq() ++
+                  (if (s.nonEmpty)
+                    Seq(InlineKeyboardButton("Заявка на продажу", callbackData = Some("c_b1;s")))
+                  else Seq()) ++
+                  (if (b.nonEmpty)
+                    Seq(InlineKeyboardButton("Заявка на покупку", callbackData = Some("c_b1;b")))
+                  else Seq())
+
+              )
+              val keyboard = InlineKeyboardMarkup(buttons)
+              SendMessage(Left(chatId), "Какой тип заявки вы хотите составить?", replyMarkup = Some(keyboard))
+            }
+          }
+          else
+            SendMessage(Left(chatId),
+              """
+                |Так как мы не смогли связать вас с какой-лобо компанией,
+                |эта функция для вас пока что недоступна.
+                |
+                |Если являетесь уполномоченым представителем какой-либо компании в нашем реестре,
+                |то напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
+              """.stripMargin)
+      }
+
   }
 
   def create_bid_choose_commodity(chatId: Long, value: String): Future[SendMessage] = {
@@ -214,17 +284,17 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     Try((value.split(":").head.toInt, value.split(":").last)) match {
       case Success((contId, t)) if t == "b" || t == "s" =>
         contract.getInfo(contId).map(
-          _.map{cont =>
+          _.map { cont =>
             SendMessage(Left(chatId),
               s"""
-                |Вы хотите подать заявку по контракту №${cont._1}
-                |Вы выступаете в роли ${if (t == "b") "_покупателя_" else "_продавца_"}
-                |
+                 |Вы хотите подать заявку по контракту №${cont._1}
+                 |Вы выступаете в роли ${if (t == "b") "_покупателя_" else "_продавца_"}
+                 |
                 |Номер в реестре: _${contId}_
-                |Товар: ${cont._2}
-                |Покупатель: ${cont._3}
-                |Поставщик: ${cont._4}
-                |
+                 |Товар: ${cont._2}
+                 |Покупатель: ${cont._3}
+                 |Поставщик: ${cont._4}
+                 |
                 |Опишите условия сделки.
               """.stripMargin,
               replyMarkup = Some(ForceReply()), parseMode = Some(ParseMode.Markdown))
@@ -318,6 +388,10 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   }
 
+  def sendMessageToChat(sendMsg: SendMessage): Future[Boolean] = {
+    ws.url(url + "/sendMessage").post(toJson(sendMsg)).map(_.status == 200)
+  }
+
   def errorMsg(chatId: Long): SendMessage = {
     SendMessage(Left(chatId),
       """
@@ -368,6 +442,18 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
     result.future
   }
+
+  def toJson[T](t: T): String = compact(render4s(Extraction.decompose(t).underscoreKeys))
+
+  def toAnswerJson[T](t: T, method: String): JsValue =
+    Json.parse(
+      compact(
+        render4s(new JObject(Extraction.decompose(t).asInstanceOf[JObject].obj ++
+          List("method" -> JString(method))).underscoreKeys)
+      )
+    )
+
+  def fromJson[T: Manifest](json: String): T = parse4s(json).camelizeKeys.extract[T]
 
   def genModel(pass: Option[String]) = Action {
     val res = for {
