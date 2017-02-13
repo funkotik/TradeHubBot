@@ -327,6 +327,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         }
       }
     } yield {
+      val mkp = ReplyKeyboardRemove()
       if (insertRes >= 0) {
         if (uc.isDefined) {
           if (com.isDefined) {
@@ -342,7 +343,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                  |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
                  |(комманда /feedback ) указав имя и номер телефона.
           """.
-                stripMargin
+                stripMargin,
+              replyMarkup = Some(mkp)
             )
           } else {
             SendMessage(Left(chatId),
@@ -353,7 +355,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                  |
                  |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
                  |(комманда /feedback ) указав имя и номер телефона.
-          """.stripMargin
+          """.stripMargin,
+              replyMarkup = Some(mkp)
             )
           }
         }
@@ -368,7 +371,9 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                |
              |Если вы не имеете отношения к этой компании то напишите об этом в поддержку,
                |(комманда /feedback ) указав имя и номер телефона.
-          """.stripMargin)
+          """.stripMargin,
+            replyMarkup = Some(mkp)
+          )
         } else {
           SendMessage(Left(chatId),
             s"""
@@ -380,7 +385,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                |
                |Если являетесь уполномоченым представителем какой-либо компании в нашем реестре,
                |то напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
-          """.stripMargin
+          """.stripMargin,
+            replyMarkup = Some(mkp)
           )
         }
       } else {
