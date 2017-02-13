@@ -66,11 +66,12 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
       ((usr, cont), com) <- {
         if (isSell)
           userChats join
-            contracts on (_.contragentId === _.producerId) join
+            contracts.filter(_.commodityId === commodityId) on (_.contragentId === _.producerId) join
             companies on (_._2.consumerId === _.companyId)
+
         else
           userChats join
-            contracts on (_.contragentId === _.consumerId) join
+            contracts.filter(_.commodityId === commodityId) on (_.contragentId === _.consumerId) join
             companies on (_._2.producerId === _.companyId)
       }
     } yield (com.companyId, com.companyName, cont.contractNumber, cont.contractId)
