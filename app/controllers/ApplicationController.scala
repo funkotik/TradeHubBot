@@ -151,7 +151,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           "b"
       }.toOption
     )
-
+    println(contIdOpt, tOpt)
     (contIdOpt, tOpt, msg.from) match {
       case (Some(contId), Some(t), Some(usr)) if t == "b" || t == "s" =>
         contract.get(contId).flatMap(
