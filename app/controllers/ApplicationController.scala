@@ -136,8 +136,6 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def create_bid(chatId: Long, msg: Message, repliedMsg: Message): Future[SendMessage] = {
-    println(repliedMsg.text)
-
     val contIdOpt = repliedMsg.text.flatMap(x =>
       Try {
         val s = "Номер в реестре: [0-9]*".r.findFirstIn(x).get
