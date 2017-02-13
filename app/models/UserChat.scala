@@ -48,11 +48,11 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
     val query = for {
       (comm, _) <- {
         if (isSell)
-          userChats join
+          userChats.filter(_.chatId === userId.toInt) join
             contracts on (_.contragentId === _.producerId) join
             commodities on (_._2.commodityId === _.commodityId) groupBy (_._2)
         else
-          userChats join
+          userChats.filter(_.chatId === userId.toInt) join
             contracts on (_.contragentId === _.consumerId) join
             commodities on (_._2.commodityId === _.commodityId) groupBy (_._2)
       }
