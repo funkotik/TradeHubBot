@@ -34,8 +34,10 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
   def get(partnerId: Int): Future[Option[UsersChatsRow]] =
     db.run(userChats.filter(_.contragentId === partnerId).result.headOption)
 
-  def get(chatId: Long): Future[Option[UsersChatsRow]] =
+  def get(chatId: Long): Future[Option[UsersChatsRow]] = {
+    println(chatId)
     db.run(userChats.filter(_.chatId === chatId.toInt).result.headOption)
+  }
 
   def insert(user: UsersChatsRow): Future[Int] =
     db.run(userChats returning userChats.map(_.id) += user)
