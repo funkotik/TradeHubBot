@@ -221,13 +221,13 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                 |Вы выступаете в роли ${if (t == "b") "_покупателя_" else "_продавца_"}
                 |
                 |Номер в реестре: _${contId}_
-                |Товар:           ${cont._2}
-                |Покупатель:      ${cont._3}
-                |Поставщик:       ${cont._4}
+                |Товар: ${cont._2}
+                |Покупатель: ${cont._3}
+                |Поставщик: ${cont._4}
                 |
                 |Опишите условия сделки.
               """.stripMargin,
-              replyMarkup = Some(ForceReply()))
+              replyMarkup = Some(ForceReply()), parseMode = Some(ParseMode.Markdown))
           }.getOrElse(errorMsg(chatId))
         )
 
