@@ -27,7 +27,7 @@ class Contract @Inject()(dbConfigProvider: DatabaseConfigProvider)
 
   def getInfo(contId: Int): Future[Option[(Int, String, String, String)]] = {
     val query = for {
-      (((cont, comm), cons), prod) <- contracts join
+      (((cont, comm), cons), prod) <- contracts.filter(_.contractId === contId) join
         commodities on (_.commodityId === _.commodityId) join
         companies on (_._1.consumerId === _.companyId) join
         companies on (_._1._1.producerId === _.companyId)
