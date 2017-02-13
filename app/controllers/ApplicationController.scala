@@ -97,8 +97,13 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   def sendToExternal(chatId: Long, value: String): Future[SendMessage] = {
     val res = Try(value.toInt) match {
       case Success(cId) =>
-        ws.url("http://159.203.169.25/bot/webhook")
-          .post(Json.obj("contract_id" -> JsNumber(cId))).map(_.status == 200)
+
+        val res = ws.url("http://159.203.169.25/bot/webhook")
+          .post(Json.obj("contract_id" -> JsNumber(cId)))
+        res.map(x => println(x.body))
+        res.map(_.status == 200)
+
+
       case Failure(_) =>
         Future successful false
     }
