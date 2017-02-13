@@ -73,11 +73,16 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         val command = getCommand(msg)
         command match {
           case Some("/start") => start(msg.chat.id)
-          case Some("/create_bid") => create_bid(msg.chat.id)
-          case _ => msg.contact match {
-            case Some(x) => store_contact(msg.chat.id, x)
-            case None => Future successful errorMsg(msg.chat.id)
-          }
+          case Some("/create_bid") => create_bid_message(msg.chat.id)
+          case _ =>
+            msg.replyToMessage match {
+              case Some(x) => create_bid(msg.chat.id, msg, x)
+              case None =>
+                msg.contact match {
+                  case Some(x) => store_contact(msg.chat.id, x)
+                  case None => Future successful errorMsg(msg.chat.id)
+                }
+            }
         }
 
       case (None, Some(cbq)) =>
@@ -121,7 +126,36 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     }
   }
 
-  def create_bid(chatId: Long): Future[SendMessage] = {
+  def create_bid(chatId: Long, msg: Message, repliedMsg: Message): Future[SendMessage] = {
+    val contIdOpt = repliedMsg.text.flatMap(x =>
+      Try {
+        val s = "Номер в реестре: _[0-9]*_".r.findFirstIn(x).get
+        println(s)
+        s.substring(18, s.length - 1).toInt
+      }.toOption
+    )
+    val t = repliedMsg.text.flatMap(x =>
+      Try {
+        val s = "Вы выступаете в роли _.*_".r.findFirstIn(x).get
+        println(s)
+        if(s.substring(22, s.length - 1) == "продавца")
+          "s"
+        else
+          "b"
+      }.toOption
+    )
+
+    println(contIdOpt, t)
+
+    Future successful SendMessage(Left(chatId),
+      """
+        |Поздравляем, ваша заявка оформлена и передана вашим партнерам.
+      """.stripMargin
+    )
+
+  }
+
+  def create_bid_message(chatId: Long): Future[SendMessage] = {
     val buttons = Seq(
       Seq(
         InlineKeyboardButton("Заявка на покупку", callbackData = Some("c_b1;b")),
@@ -163,7 +197,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             val buttons =
               comSeq.map(c =>
                 Seq(
-                  InlineKeyboardButton(s"${c._2}, Контракт #${c._3} ", Some(s"c_b3;${c._3}"))
+                  InlineKeyboardButton(s"${c._2}, Контракт #${c._3} ", Some(s"c_b3;${c._4}:$t"))
                 )
               )
 
@@ -177,8 +211,31 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def create_bid_ask_conditions(chatId: Long, value: String): Future[SendMessage] = {
-    val reply = ForceReply()
-    Future successful SendMessage(Left(chatId), "Опишите условия сделки", replyMarkup = Some(reply))
+    Try((value.split(":").head.toInt, value.split(":").last)) match {
+      case Success((contId, t)) if t == "b" || t == "s" =>
+        contract.getInfo(contId).map(
+          _.map{cont =>
+            SendMessage(Left(chatId),
+              s"""
+                |Вы хотите подать заявку по контракту №${cont._1}
+                |Вы выступаете в роли ${if (t == "b") "_покупателя_" else "_продавца_"}
+                |
+                |Номер в реестре: _${contId}_
+                |Товар:           ${cont._2}
+                |Покупатель:      ${cont._3}
+                |Поставщик:       ${cont._4}
+                |
+                |Опишите условия сделки.
+              """.stripMargin,
+              replyMarkup = Some(ForceReply()))
+          }.getOrElse(errorMsg(chatId))
+        )
+
+      case Failure(_) =>
+        Future successful errorMsg(chatId)
+    }
+
+
   }
 
   def store_contact(chatId: Long, contact: Contact): Future[SendMessage] = {
