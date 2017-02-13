@@ -394,7 +394,9 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def sendMessageToChat(sendMsg: SendMessage): Future[Boolean] = {
-    val res = ws.url(url + "/sendMessage").post(toJson(sendMsg))
+    println(toJson(sendMsg))
+    println(Json.parse(toJson(sendMsg).toString))
+    val res = ws.url(url + "/sendMessage").post(Json.parse(toJson(sendMsg).toString))
     res.map(x => println(x.body, x.status))
     res.map(_.status == 200)
   }
