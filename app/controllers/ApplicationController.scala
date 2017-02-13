@@ -136,16 +136,16 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
     val contIdOpt = repliedMsg.text.flatMap(x =>
       Try {
-        val s = "Номер в реестре: _[0-9]*_".r.findFirstIn(x).get
+        val s = "Номер в реестре: [0-9]*".r.findFirstIn(x).get
         println(s)
-        s.substring(18, s.length - 1).toInt
+        s.substring(17, s.length).toInt
       }.toOption
     )
     val tOpt = repliedMsg.text.flatMap(x =>
       Try {
-        val s = "Вы выступаете в роли _.*_".r.findFirstIn(x).get
+        val s = "Вы выступаете в роли .*".r.findFirstIn(x).get
         println(s)
-        if (s.substring(22, s.length - 1) == "продавца")
+        if (s.substring(21, s.length) == "продавца")
           "s"
         else
           "b"
