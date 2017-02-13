@@ -100,7 +100,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
         val res = ws.url("http://159.203.169.25/bot/webhook")
           .post(Json.obj("contract_id" -> JsNumber(cId)))
-        res.map(x => println(x.body))
+        res.map(x => println(x.body, x.status))
         res.map(_.status == 200)
 
 
