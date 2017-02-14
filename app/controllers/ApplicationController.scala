@@ -22,6 +22,7 @@ import org.json4s.native.Serialization
 import org.json4s.native.JsonMethods.{parse => parse4s, render => render4s, _}
 import telegram.methods.{ChatAction, ParseMode, SendMessage}
 import org.json4s.ext.EnumNameSerializer
+import play.api.cache.CacheApi
 import play.api.libs.ws.ahc.AhcWSResponse
 
 import scala.util.{Failure, Success, Try}
@@ -31,7 +32,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                                       company: Company, commodity: Commodity,
                                       bid: Bid, contract: Contract,
                                       monitoringNews: MonitoringNews,
-                                      userChat: UserChat)
+                                      userChat: UserChat, cache: CacheApi)
                                      (implicit val exc: ExecutionContext)
   extends Controller {
 
@@ -66,7 +67,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             feedback_message(msg.chat.id)
           case _ =>
             msg.replyToMessage match {
-              case Some(x) => create_bid(msg.chat.id, msg, x)
+              case Some(x) =>
+                process_reply(msg, x)
               case None =>
                 msg.contact match {
                   case Some(x) => store_contact(msg.chat.id, x)
@@ -147,22 +149,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     )
   }
 
-  def create_bid(chatId: Long, msg: Message, repliedMsg: Message): Future[SendMessage] = {
-    val contIdOpt = repliedMsg.text.flatMap(x =>
-      Try {
-        val s = "Номер в реестре: [0-9]*".r.findFirstIn(x).get
-        s.substring(17, s.length).toInt
-      }.toOption
-    )
-    val tOpt = repliedMsg.text.flatMap(x =>
-      Try {
-        val s = "Вы выступаете в роли .*".r.findFirstIn(x).get
-        if (s.substring(21, s.length) == "продавца")
-          "s"
-        else
-          "b"
-      }.toOption
-    )
+  def create_bid(chatId: Long, msg: Message, contIdOpt: Option[Int], tOpt: Option[String]): Future[SendMessage] = {
+
     (contIdOpt, tOpt, msg.from) match {
       case (Some(contId), Some(t), Some(usr)) if t == "b" || t == "s" =>
         contract.get(contId).flatMap(
@@ -299,19 +287,18 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case Success((contId, t)) if t == "b" || t == "s" =>
         contract.getInfo(contId).map(
           _.map { cont =>
+            sendMessageToChat(SendMessage(Left(chatId), "Опишите условия сделки", replyMarkup = Some(ForceReply())))
+//            cache.set(s"reply:$chatId:${replyTo.replyToMessage.get.messageId}")
             SendMessage(Left(chatId),
               s"""
                  |Вы хотите подать заявку по контракту №${cont._1}
                  |Вы выступаете в роли ${if (t == "b") "_покупателя_" else "_продавца_"}
                  |
-                |Номер в реестре: _${contId}_
                  |Товар: ${cont._2}
                  |Покупатель: ${cont._3}
                  |Поставщик: ${cont._4}
-                 |
-                |Опишите условия сделки.
               """.stripMargin,
-              replyMarkup = Some(ForceReply()), parseMode = Some(ParseMode.Markdown))
+              parseMode = Some(ParseMode.Markdown))
           }.getOrElse(errorMsg(chatId))
         )
 
@@ -408,9 +395,22 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   }
 
+  def process_reply(msg: Message, replyTo: Message) = {
+
+    val cv = cache.get[String](s"reply:${msg.chat.id}:${replyTo.replyToMessage.get.messageId}")
+    cv.map(_.split(":").toList) map {
+      case "create_bid" :: chatId :: t :: Nil =>
+        create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
+
+//      case "feedback" :: Nil
+    }
+    Future successful errorMsg(msg.chat.id)
+  }
+
   def sendMessageToChat(sendMsg: SendMessage): Future[Boolean] = {
     ws.url(url + "/sendMessage")
-      .post(Json.parse(toJson(sendMsg).toString)).map(_.status == 200)
+      .post(Json.parse(toJson(sendMsg).toString)).map(println)
+    Future.successful(true)
   }
 
   def errorMsg(chatId: Long): SendMessage = {
