@@ -69,7 +69,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             msg.replyToMessage match {
               case Some(x) if x.from.isDefined =>
                 process_reply(msg, x)
-              case None =>
+              case _ =>
                 msg.contact match {
                   case Some(x) => store_contact(msg.chat.id, x)
                   case None => Future successful errorMsg(msg.chat.id)
