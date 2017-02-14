@@ -181,10 +181,10 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                           replyMarkup = Some(keyboard)
                         )
                       )
-                    }.getOrElse(Future successful false)
+                    }.getOrElse(Future successful 0)
                     )
                     partMsg.map(x =>
-                      if (x)
+                      if (x > 0)
                         SendMessage(Left(chatId), "Предложение принято и выслано вашим партнерам")
                       else
                         errorMsg(chatId)
