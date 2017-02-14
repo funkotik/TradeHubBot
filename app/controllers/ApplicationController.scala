@@ -151,7 +151,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       )
     ).map{mId =>
       cache.set(s"reply:${msg.chat.id}:$mId", s"feedback_response:$supportChatId:${msg.messageId}")
-      SendMessage(Left(msg.chat.id), "Ваше сообщение отпралено.")
+      SendMessage(Left(msg.chat.id), s"Ваше сообщение отпралено. $mId")
     }
   }
 
