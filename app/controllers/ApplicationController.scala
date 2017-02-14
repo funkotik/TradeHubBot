@@ -139,7 +139,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     }
   }
 
-  def create_feedback_request(msg: Message) = {
+  def create_feedback_request(msg: Message): Future[SendMessage] = {
     sendMessageToChat(
       SendMessage(
         Left(conf.getLong("supportChatId").get),
@@ -423,7 +423,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case "create_bid" :: chatId :: t :: Nil =>
         create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
 
-      case "feedback_request" :: Nil
+      case "feedback_request" :: Nil =>
         create_feedback_request(msg)
 
     } getOrElse (Future successful errorMsg(msg.chat.id))
@@ -463,8 +463,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     )
     val client = ws.underlying.asInstanceOf[AsyncHttpClient]
 
-    val builder = client.preparePost(url + "/setWebhook" +
-      "")
+    val builder = client.preparePost(url + "/setWebhook")
 
     builder.setHeader("Content-Type", "multipart/form-data")
     bodyParts.foreach(builder.addBodyPart)
