@@ -67,7 +67,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             feedback_message(msg.chat.id)
           case _ =>
             msg.replyToMessage match {
-              case Some(x) if x.from.isDefined =>
+              case Some(x) if x.isDefined =>
                 process_reply(msg, x)
               case _ =>
                 msg.contact match {
@@ -398,7 +398,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def process_reply(msg: Message, replyTo: Message) = {
 
-    val cv = cache.get[String](s"reply:${msg.chat.id}:${replyTo.replyToMessage.get.messageId}")
+    val cv = cache.get[String](s"reply:${msg.chat.id}:${replyTo.messageId}")
     cv.map(_.split(":").toList) map {
       case "create_bid" :: chatId :: t :: Nil =>
         create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
