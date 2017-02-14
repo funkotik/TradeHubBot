@@ -20,7 +20,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import org.json4s._
 import org.json4s.native.Serialization
 import org.json4s.native.JsonMethods.{parse => parse4s, render => render4s, _}
-import telegram.methods._
+import telegram.methods.{ChatAction, ParseMode, SendMessage}
 import org.json4s.ext.EnumNameSerializer
 import play.api.cache.CacheApi
 import play.api.libs.ws.ahc.AhcWSResponse
@@ -67,7 +67,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             feedback_message(msg.chat.id)
           case _ =>
             msg.replyToMessage match {
-              case Some(x) =>
+              case Some(x) if x.from.isDefined =>
                 process_reply(msg, x)
               case None =>
                 msg.contact match {
@@ -157,7 +157,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           _.map { cont =>
             val newBid = BidsRow(0, if (t == "b") cont.consumerId else cont.producerId,
               t == "s", cont.commodityId, msg.text.getOrElse("Подробности отсутствуют"))
-            bid.insert(newBid).flatMap { r =>
+            bid.insert(newBid).flatMap{r =>
               if (r > 0) {
                 userChat.get(if (t == "b") cont.producerId else cont.consumerId).flatMap(
                   _.map { partner =>
@@ -181,15 +181,18 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                           replyMarkup = Some(keyboard)
                         )
                       )
-                    }.getOrElse(Future successful 0)
+                    }.getOrElse(Future successful false)
                     )
                     partMsg.map(x =>
+                      if (x)
                         SendMessage(Left(chatId), "Предложение принято и выслано вашим партнерам")
+                      else
+                        errorMsg(chatId)
                     )
                   }.getOrElse(Future successful errorMsg(chatId))
                 )
               } else Future successful errorMsg(chatId)
-            }
+          }
           }.getOrElse(Future successful errorMsg(chatId))
         )
       case _ => Future successful errorMsg(chatId)
@@ -279,28 +282,25 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     }
   }
 
-  def create_bid_ask_conditions(chatId: Long, value: String): Future[ApiRequestJson[Message]] = {
+  def create_bid_ask_conditions(chatId: Long, value: String): Future[SendMessage] = {
     Try((value.split(":").head.toInt, value.split(":").last)) match {
       case Success((contId, t)) if t == "b" || t == "s" =>
-        contract.getInfo(contId).flatMap(
+        contract.getInfo(contId).map(
           _.map { cont =>
-            sendMessageToChat(SendMessage(Left(chatId), "Опишите условия сделки", replyMarkup = Some(ForceReply()))).map {
-              mId =>
-                cache.set(s"reply:$chatId:$mId", "create_bid:")
-                EditMessageText(Some(Left(chatId)), Some(mId),
-                  text =
-                    s"""
-                       |Вы хотите подать заявку по контракту №${cont._1}
-                       |Вы выступаете в роли ${if (t == "b") "_покупателя_" else "_продавца_"}
-                       |
-                       |Товар: ${cont._2}
-                       |Покупатель: ${cont._3}
-                       |Поставщик: ${cont._4}
+            sendMessageToChat(SendMessage(Left(chatId), "Опишите условия сделки", replyMarkup = Some(ForceReply()))).map(
+              mId => cache.set(s"reply:$chatId:$mId", s"create_bid:$contId:$t")
+            )
+            SendMessage(Left(chatId),
+              s"""
+                 |Вы хотите подать заявку по контракту №${cont._1}
+                 |Вы выступаете в роли ${if (t == "b") "_покупателя_" else "_продавца_"}
+                 |
+                 |Товар: ${cont._2}
+                 |Покупатель: ${cont._3}
+                 |Поставщик: ${cont._4}
               """.stripMargin,
-                  parseMode = Some(ParseMode.Markdown)
-                )
-            }
-          }.getOrElse(Future successful errorMsg(chatId))
+              parseMode = Some(ParseMode.Markdown))
+          }.getOrElse(errorMsg(chatId))
         )
 
       case Failure(_) =>
@@ -403,14 +403,14 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case "create_bid" :: chatId :: t :: Nil =>
         create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
 
-      //      case "feedback" :: Nil
+//      case "feedback" :: Nil
     }
     Future successful errorMsg(msg.chat.id)
   }
 
   def sendMessageToChat(sendMsg: SendMessage): Future[Int] = {
     ws.url(url + "/sendMessage")
-      .post(Json.parse(toJson(sendMsg).toString)).map { x => (x.json \ "result" \ "message_id").as[Int] }
+      .post(Json.parse(toJson(sendMsg).toString)).map{x => (x.json \ "result" \ "message_id").as[Int]}
   }
 
   def errorMsg(chatId: Long): SendMessage = {
@@ -466,15 +466,13 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def toJson[T](t: T): String = compact(render4s(Extraction.decompose(t).underscoreKeys))
 
-  def toAnswerJson[T](t: T, method: String): JsValue = {
-    println(method)
+  def toAnswerJson[T](t: T, method: String): JsValue =
     Json.parse(
       compact(
         render4s(new JObject(Extraction.decompose(t).asInstanceOf[JObject].obj ++
           List("method" -> JString(method))).underscoreKeys)
       )
     )
-  }
 
   def fromJson[T: Manifest](json: String): T = parse4s(json).camelizeKeys.extract[T]
 
