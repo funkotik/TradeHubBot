@@ -466,13 +466,15 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def toJson[T](t: T): String = compact(render4s(Extraction.decompose(t).underscoreKeys))
 
-  def toAnswerJson[T](t: T, method: String): JsValue =
+  def toAnswerJson[T](t: T, method: String): JsValue = {
+    println(method)
     Json.parse(
       compact(
         render4s(new JObject(Extraction.decompose(t).asInstanceOf[JObject].obj ++
           List("method" -> JString(method))).underscoreKeys)
       )
     )
+  }
 
   def fromJson[T: Manifest](json: String): T = parse4s(json).camelizeKeys.extract[T]
 
