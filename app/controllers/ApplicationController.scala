@@ -399,13 +399,12 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   def process_reply(msg: Message, replyTo: Message): Future[SendMessage] = {
 
     val cv = cache.get[String](s"reply:${msg.chat.id}:${replyTo.messageId}")
-    cv.map(_.split(":").toList) map {
-      case "create_bid" :: chatId :: t :: Nil =>
-        create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
+      cv.map(_.split(":").toList) map {
+        case "create_bid" :: chatId :: t :: Nil =>
+          create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
 
-//      case "feedback" :: Nil
-    }
-    Future successful errorMsg(msg.chat.id)
+        //      case "feedback" :: Nil
+      } getOrElse(Future successful errorMsg(msg.chat.id))
   }
 
   def sendMessageToChat(sendMsg: SendMessage): Future[Int] = {
