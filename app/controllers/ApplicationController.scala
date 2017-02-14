@@ -140,17 +140,18 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def create_feedback_request(msg: Message): Future[SendMessage] = {
+    val supportChatId = conf.getLong("supportChatId").get
     sendMessageToChat(
       SendMessage(
-        Left(conf.getLong("supportChatId").get),
+        Left(supportChatId),
         s"""
           |От пользователя ${msg.from.map(x => x.firstName + " " + x.lastName.getOrElse("")).getOrElse("НЕИЗВЕСНО")}:
           |${msg.text.getOrElse("")}
         """.stripMargin
       )
     ).map{mId =>
-      cache.set(s"reply:${msg.chat.id}:$mId", s"feedback_response:${msg.chat.id}:${msg.messageId}")
-      SendMessage(Left(msg.chat.id), "Для ответа, сделайте Reply на сообщение выше")
+      cache.set(s"reply:${msg.chat.id}:$mId", s"feedback_response:${supportChatId}:${msg.messageId}")
+      SendMessage(Left(msg.chat.id), "Ваше сообщение отпралено.")
     }
   }
 
