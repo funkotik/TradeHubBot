@@ -139,6 +139,21 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     }
   }
 
+  def create_feedback_request(msg: Message) = {
+    sendMessageToChat(
+      SendMessage(
+        Left(conf.getLong("supportChatId").get),
+        s"""
+          |От пользователя ${msg.from.map(x => x.firstName + " " + x.lastName.getOrElse("")).getOrElse("НЕИЗВЕСНО")}:
+          |${msg.text.getOrElse("")}
+        """.stripMargin
+      )
+    ).map{mId =>
+      cache.set(s"reply:${msg.chat.id}:$mId", "feedback_response")
+      SendMessage(Left(msg.chat.id), "")
+    }
+  }
+
   def feedback_message(chatId: Long): Future[SendMessage] = {
     val mkp = ForceReply()
     sendMessageToChat(
@@ -149,7 +164,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         replyMarkup = Some(mkp)
       )
     ).map { mId =>
-      cache.set(s"reply:$chatId:$mId", "feedback")
+      cache.set(s"reply:$chatId:$mId", "feedback_request")
       SendMessage(Left(chatId), "Служба поддержки ответит вам в скором сремени")
     }
   }
@@ -408,7 +423,9 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case "create_bid" :: chatId :: t :: Nil =>
         create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
 
-      //      case "feedback" :: Nil
+      case "feedback_request" :: Nil
+        create_feedback_request(msg)
+
     } getOrElse (Future successful errorMsg(msg.chat.id))
   }
 
