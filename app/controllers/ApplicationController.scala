@@ -150,10 +150,13 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         """.stripMargin
       )
     ).map{mId =>
-      cache.set(s"reply:${msg.chat.id}:$mId", s"feedback_response:$supportChatId:${msg.messageId}")
+      cache.set(s"reply:$supportChatId:$mId", s"feedback_response:$supportChatId:${msg.messageId}")
+      println(s"feedback_response:$supportChatId:${msg.messageId}")
       SendMessage(Left(msg.chat.id), s"Ваше сообщение отпралено. $mId")
     }
   }
+
+
 
   def feedback_message(chatId: Long): Future[SendMessage] = {
     val mkp = ForceReply()
