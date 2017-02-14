@@ -150,7 +150,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         """.stripMargin
       )
     ).map{mId =>
-      cache.set(s"reply:${msg.chat.id}:$mId", s"feedback_response:${supportChatId}:${msg.messageId}")
+      cache.set(s"reply:${msg.chat.id}:$mId", s"feedback_response:$supportChatId:${msg.messageId}")
       SendMessage(Left(msg.chat.id), "Ваше сообщение отпралено.")
     }
   }
@@ -420,6 +420,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   def process_reply(msg: Message, replyTo: Message): Future[SendMessage] = {
 
     val cv = cache.get[String](s"reply:${msg.chat.id}:${replyTo.messageId}")
+    println(s"reply:${msg.chat.id}:${replyTo.messageId}")
+    println(cv)
     cv.map(_.split(":").toList) map {
       case "create_bid" :: chatId :: t :: Nil =>
         create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
@@ -427,7 +429,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case "feedback_request":: Nil =>
         create_feedback_request(msg)
 
-      case "feedback_response" :: chatId:: mId :: Nil =>
+      case "feedback_response" :: chatId :: mId :: Nil =>
         feedback_redirect_answer(msg, chatId.toLong, mId.toLong)
 
     } getOrElse (Future successful errorMsg(msg.chat.id))
