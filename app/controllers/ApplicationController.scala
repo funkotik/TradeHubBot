@@ -67,7 +67,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             feedback_message(msg.chat.id)
           case _ =>
             msg.replyToMessage match {
-              case Some(x) if x.isDefined =>
+              case Some(x) =>
                 process_reply(msg, x)
               case _ =>
                 msg.contact match {
@@ -396,7 +396,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   }
 
-  def process_reply(msg: Message, replyTo: Message) = {
+  def process_reply(msg: Message, replyTo: Message): Future[SendMessage] = {
 
     val cv = cache.get[String](s"reply:${msg.chat.id}:${replyTo.messageId}")
     cv.map(_.split(":").toList) map {
