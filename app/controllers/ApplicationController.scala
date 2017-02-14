@@ -141,12 +141,17 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def feedback_message(chatId: Long): Future[SendMessage] = {
     val mkp = ForceReply()
-    Future successful SendMessage(Left(chatId),
-      """
-        |Напишите пожалуйста ваш отзыв или предложение.
-      """.stripMargin,
-      replyMarkup = Some(mkp)
-    )
+    sendMessageToChat(
+      SendMessage(Left(chatId),
+        """
+          |Напишите пожалуйста ваш отзыв или предложение.
+        """.stripMargin,
+        replyMarkup = Some(mkp)
+      )
+    ).map { mId =>
+      cache.set(s"reply:$chatId:$mId", "feedback")
+      SendMessage(Left(chatId), "Служба поддержки ответит вам в скором сремени")
+    }
   }
 
   def create_bid(chatId: Long, msg: Message, contIdOpt: Option[Int], tOpt: Option[String]): Future[SendMessage] = {
@@ -157,7 +162,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           _.map { cont =>
             val newBid = BidsRow(0, if (t == "b") cont.consumerId else cont.producerId,
               t == "s", cont.commodityId, msg.text.getOrElse("Подробности отсутствуют"))
-            bid.insert(newBid).flatMap{r =>
+            bid.insert(newBid).flatMap { r =>
               if (r > 0) {
                 userChat.get(if (t == "b") cont.producerId else cont.consumerId).flatMap(
                   _.map { partner =>
@@ -192,7 +197,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                   }.getOrElse(Future successful errorMsg(chatId))
                 )
               } else Future successful errorMsg(chatId)
-          }
+            }
           }.getOrElse(Future successful errorMsg(chatId))
         )
       case _ => Future successful errorMsg(chatId)
@@ -399,17 +404,17 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   def process_reply(msg: Message, replyTo: Message): Future[SendMessage] = {
 
     val cv = cache.get[String](s"reply:${msg.chat.id}:${replyTo.messageId}")
-      cv.map(_.split(":").toList) map {
-        case "create_bid" :: chatId :: t :: Nil =>
-          create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
+    cv.map(_.split(":").toList) map {
+      case "create_bid" :: chatId :: t :: Nil =>
+        create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
 
-        //      case "feedback" :: Nil
-      } getOrElse(Future successful errorMsg(msg.chat.id))
+      //      case "feedback" :: Nil
+    } getOrElse (Future successful errorMsg(msg.chat.id))
   }
 
   def sendMessageToChat(sendMsg: SendMessage): Future[Int] = {
     ws.url(url + "/sendMessage")
-      .post(Json.parse(toJson(sendMsg).toString)).map{x => (x.json \ "result" \ "message_id").as[Int]}
+      .post(Json.parse(toJson(sendMsg).toString)).map { x => (x.json \ "result" \ "message_id").as[Int] }
   }
 
   def errorMsg(chatId: Long): SendMessage = {
