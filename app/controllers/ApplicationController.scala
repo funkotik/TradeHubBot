@@ -149,7 +149,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         """.stripMargin
       )
     ).map{mId =>
-      cache.set(s"reply:${msg.chat.id}:$mId", "feedback_response")
+      cache.set(s"reply:${msg.chat.id}:$mId", s"feedback_response:${msg.chat.id}:${msg.messageId}")
       SendMessage(Left(msg.chat.id), "")
     }
   }
@@ -423,10 +423,17 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case "create_bid" :: chatId :: t :: Nil =>
         create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
 
-      case "feedback_request" :: Nil =>
+      case "feedback_request":: Nil =>
         create_feedback_request(msg)
 
+      case "feedback_response" :: chatId:: mId :: Nil =>
+        feedback_redirect_answer(msg, chatId.toLong, mId.toLong)
+
     } getOrElse (Future successful errorMsg(msg.chat.id))
+  }
+
+  def feedback_redirect_answer(msg: Message, chatId: Long, mId: Long): Future[SendMessage] = {
+    Future successful SendMessage(Left(chatId), msg.text.getOrElse(""), replyToMessageId = Some(mId))
   }
 
   def sendMessageToChat(sendMsg: SendMessage): Future[Int] = {
