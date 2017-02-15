@@ -66,7 +66,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
     val js = request.body.asJson.get
     val update = fromJson[Update](js.toString)
-
+    println(update)
     val response = (update.message, update.callbackQuery) match {
       case (Some(msg), None) =>
         val command = getCommand(msg)
