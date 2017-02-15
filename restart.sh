@@ -1,5 +1,5 @@
 #!/bin/bash
-git pull
+#git pull
 kill -9 $(cat target/universal/tradehubbot-1.0/RUNNING_PID )
 rm -r target/universal/tradehubbot-1.0
 sbt dist

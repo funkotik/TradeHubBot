@@ -1,0 +1,26 @@
+*{
+font-family: 'Open Sans', sans-serif;
+}
+
+.itm{
+    border:1px solid #d5dae2;
+    padding-bottom: 0.5%;
+    margin: 0.5%;
+    height: 300px;
+    position: relative;
+}
+
+.row {
+    margin-top:58px;
+}
+
+.navbar-brand img{
+    margin-top:-10px;
+    height:40px;
+    width:74px;
+}
+
+.btn{
+    position: absolute;
+    bottom: 5%;
+}

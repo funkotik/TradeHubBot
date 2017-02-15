@@ -14,7 +14,7 @@ trait Tables {
   import slick.jdbc.{GetResult => GR}
 
   /** DDL for all tables. Call .create to execute. */
-  lazy val schema: profile.SchemaDescription = Array(Bids.schema, Commodities.schema, Companies.schema, Contracts.schema, MonitoringNews.schema, TgAddresses.schema, UsersChats.schema).reduceLeft(_ ++ _)
+  lazy val schema: profile.SchemaDescription = Array(Bids.schema, Commodities.schema, Companies.schema, Contracts.schema, MonitoringNews.schema, Tenders.schema, TgAddresses.schema, UsersChats.schema).reduceLeft(_ ++ _)
   @deprecated("Use .schema instead of .ddl", "3.0")
   def ddl = schema
 
@@ -183,6 +183,71 @@ trait Tables {
   }
   /** Collection-like TableQuery object for table MonitoringNews */
   lazy val MonitoringNews = new TableQuery(tag => new MonitoringNews(tag))
+
+  /** Entity class storing rows of table Tenders
+   *  @param id Database column id SqlType(serial), AutoInc, PrimaryKey
+   *  @param startDate Database column start_date SqlType(date)
+   *  @param endDate Database column end_date SqlType(date)
+   *  @param numberOfBids Database column number_of_bids SqlType(int4)
+   *  @param amount Database column amount SqlType(float8)
+   *  @param currency Database column currency SqlType(varchar), Length(10,true)
+   *  @param taxIncluded Database column tax_included SqlType(bool)
+   *  @param title Database column title SqlType(varchar), Length(255,true)
+   *  @param description Database column description SqlType(text), Default(None)
+   *  @param zpuId Database column zpu_id SqlType(varchar), Length(255,true)
+   *  @param link Database column link SqlType(varchar), Length(255,true)
+   *  @param lotsText Database column lots_text SqlType(text), Default(None)
+   *  @param authorCompany Database column author_company SqlType(varchar), Length(255,true)
+   *  @param telephone Database column telephone SqlType(varchar), Length(255,true)
+   *  @param status Database column status SqlType(varchar), Length(255,true)
+   *  @param isCommercial Database column is_commercial SqlType(bool) */
+  case class TendersRow(id: Int, startDate: java.sql.Date, endDate: java.sql.Date, numberOfBids: Int, amount: Double, currency: String, taxIncluded: Boolean, title: String, description: Option[String] = None, zpuId: String, link: String, lotsText: Option[String] = None, authorCompany: String, telephone: String, status: String, isCommercial: Boolean)
+  /** GetResult implicit for fetching TendersRow objects using plain SQL queries */
+  implicit def GetResultTendersRow(implicit e0: GR[Int], e1: GR[java.sql.Date], e2: GR[Double], e3: GR[String], e4: GR[Boolean], e5: GR[Option[String]]): GR[TendersRow] = GR{
+    prs => import prs._
+    TendersRow.tupled((<<[Int], <<[java.sql.Date], <<[java.sql.Date], <<[Int], <<[Double], <<[String], <<[Boolean], <<[String], <<?[String], <<[String], <<[String], <<?[String], <<[String], <<[String], <<[String], <<[Boolean]))
+  }
+  /** Table description of table tenders. Objects of this class serve as prototypes for rows in queries. */
+  class Tenders(_tableTag: Tag) extends Table[TendersRow](_tableTag, "tenders") {
+    def * = (id, startDate, endDate, numberOfBids, amount, currency, taxIncluded, title, description, zpuId, link, lotsText, authorCompany, telephone, status, isCommercial) <> (TendersRow.tupled, TendersRow.unapply)
+    /** Maps whole row to an option. Useful for outer joins. */
+    def ? = (Rep.Some(id), Rep.Some(startDate), Rep.Some(endDate), Rep.Some(numberOfBids), Rep.Some(amount), Rep.Some(currency), Rep.Some(taxIncluded), Rep.Some(title), description, Rep.Some(zpuId), Rep.Some(link), lotsText, Rep.Some(authorCompany), Rep.Some(telephone), Rep.Some(status), Rep.Some(isCommercial)).shaped.<>({r=>import r._; _1.map(_=> TendersRow.tupled((_1.get, _2.get, _3.get, _4.get, _5.get, _6.get, _7.get, _8.get, _9, _10.get, _11.get, _12, _13.get, _14.get, _15.get, _16.get)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
+
+    /** Database column id SqlType(serial), AutoInc, PrimaryKey */
+    val id: Rep[Int] = column[Int]("id", O.AutoInc, O.PrimaryKey)
+    /** Database column start_date SqlType(date) */
+    val startDate: Rep[java.sql.Date] = column[java.sql.Date]("start_date")
+    /** Database column end_date SqlType(date) */
+    val endDate: Rep[java.sql.Date] = column[java.sql.Date]("end_date")
+    /** Database column number_of_bids SqlType(int4) */
+    val numberOfBids: Rep[Int] = column[Int]("number_of_bids")
+    /** Database column amount SqlType(float8) */
+    val amount: Rep[Double] = column[Double]("amount")
+    /** Database column currency SqlType(varchar), Length(10,true) */
+    val currency: Rep[String] = column[String]("currency", O.Length(10,varying=true))
+    /** Database column tax_included SqlType(bool) */
+    val taxIncluded: Rep[Boolean] = column[Boolean]("tax_included")
+    /** Database column title SqlType(varchar), Length(255,true) */
+    val title: Rep[String] = column[String]("title", O.Length(255,varying=true))
+    /** Database column description SqlType(text), Default(None) */
+    val description: Rep[Option[String]] = column[Option[String]]("description", O.Default(None))
+    /** Database column zpu_id SqlType(varchar), Length(255,true) */
+    val zpuId: Rep[String] = column[String]("zpu_id", O.Length(255,varying=true))
+    /** Database column link SqlType(varchar), Length(255,true) */
+    val link: Rep[String] = column[String]("link", O.Length(255,varying=true))
+    /** Database column lots_text SqlType(text), Default(None) */
+    val lotsText: Rep[Option[String]] = column[Option[String]]("lots_text", O.Default(None))
+    /** Database column author_company SqlType(varchar), Length(255,true) */
+    val authorCompany: Rep[String] = column[String]("author_company", O.Length(255,varying=true))
+    /** Database column telephone SqlType(varchar), Length(255,true) */
+    val telephone: Rep[String] = column[String]("telephone", O.Length(255,varying=true))
+    /** Database column status SqlType(varchar), Length(255,true) */
+    val status: Rep[String] = column[String]("status", O.Length(255,varying=true))
+    /** Database column is_commercial SqlType(bool) */
+    val isCommercial: Rep[Boolean] = column[Boolean]("is_commercial")
+  }
+  /** Collection-like TableQuery object for table Tenders */
+  lazy val Tenders = new TableQuery(tag => new Tenders(tag))
 
   /** Entity class storing rows of table TgAddresses
    *  @param id Database column id SqlType(serial), AutoInc, PrimaryKey

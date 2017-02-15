@@ -32,7 +32,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                                       company: Company, commodity: Commodity,
                                       bid: Bid, contract: Contract,
                                       monitoringNews: MonitoringNews,
-                                      userChat: UserChat, cache: CacheApi)
+                                      userChat: UserChat, cache: CacheApi,
+                                      tenders: Tenders)
                                      (implicit val exc: ExecutionContext)
   extends Controller {
 
@@ -47,8 +48,15 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     new EnumNameSerializer(ChatAction) +
     new EnumNameSerializer(ParseMode)
 
-  def index = Action {
-    Ok("Выкатывай")
+  def index = Action.async { request =>
+//    tenders.getAllTenders("https://public.api.px.openprocurement.org/api/2.3/tenders")
+    setWebhook()
+    Future successful Ok("success")
+  }
+
+
+  def tender(query: String) = Action.async{
+    tenders.find(query).map(x => Ok(views.html.tenderList(x)))
   }
 
   def inbox = Action.async { request =>
@@ -60,19 +68,22 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case (Some(msg), None) =>
         val command = getCommand(msg)
         command match {
-          case Some("/start") => start(msg.chat.id)
+          case Some("/start") =>
+            start(msg.chat.id)
           case Some("/create_bid") if msg.from.isDefined =>
             create_bid_message(msg.chat.id, msg.from.get.id)
           case Some("/feedback") =>
             feedback_message(msg.chat.id)
+          case Some("/monitoring") =>
+            monitoring_message(msg.chat.id)
           case _ =>
             msg.replyToMessage match {
-              case Some(x) =>
+              case Some(x) if msg.text.isDefined =>
                 process_reply(msg, x)
               case _ =>
                 msg.contact match {
                   case Some(x) => store_contact(msg.chat.id, x)
-                  case None => Future successful errorMsg(msg.chat.id)
+                  case None => Future successful SendMessage(Left(msg.chat.id), "Я не понимаю этой комманды")
                 }
             }
         }
@@ -145,18 +156,53 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       SendMessage(
         Left(supportChatId),
         s"""
-          |От пользователя ${msg.from.map(x => x.firstName + " " + x.lastName.getOrElse("")).getOrElse("НЕИЗВЕСНО")}:
-          |${msg.text.getOrElse("")}
+           |От пользователя ${msg.from.map(x => x.firstName + " " + x.lastName.getOrElse("")).getOrElse("НЕИЗВЕСНО")}:
+           |${msg.text.getOrElse("")}
         """.stripMargin
       )
-    ).map{mId =>
+    ).map { mId =>
       cache.set(s"reply:$supportChatId:$mId", s"feedback_response:${msg.chat.id}:${msg.messageId}")
       println(s"feedback_response:$supportChatId:${msg.messageId}")
       SendMessage(Left(msg.chat.id), s"Ваше сообщение отпралено.")
     }
   }
 
+  def monitoring_message(chatId: Long): Future[SendMessage] = {
+    val mkp = ForceReply()
+    sendMessageToChat(
+      SendMessage(Left(chatId),
+        """
+          |Выберите интересующие вас товары.
+        """.stripMargin,
+        replyMarkup = Some(mkp)
+      )
+    ).map { mId =>
+      cache.set(s"reply:$chatId:$mId", "monitoring")
+      SendMessage(Left(chatId),
+        """
+          |Команда "мониторинг" позволяет вам отслеживать тендера с площадок,
+          |таких как "zakupki prom ua".
+        """.stripMargin)
+    }
+  }
 
+  def monitoring(chatId: Long, text: String): Future[SendMessage] = {
+    println(chatId, text)
+    val keyboard = InlineKeyboardMarkup(Seq(Seq(InlineKeyboardButton("Подробнее", url = Some(conf.getString("host").get + routes.ApplicationController.tender(text).url)))))
+    val res = tenders.find(text).map{x =>
+      SendMessage(Left(chatId),
+        s"""
+          |По запросу "$text" найдено:
+          |${x.length} тендеров на Rialto
+          |0 тендеров на ProZorro
+        """.stripMargin,
+        replyMarkup = Some(keyboard)
+      )
+    }
+    res.foreach(println)
+    res.recover{case e => e.printStackTrace()}
+    res
+  }
 
   def feedback_message(chatId: Long): Future[SendMessage] = {
     val mkp = ForceReply()
@@ -171,6 +217,10 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       cache.set(s"reply:$chatId:$mId", "feedback_request")
       SendMessage(Left(chatId), "Служба поддержки ответит вам в скором сремени")
     }
+  }
+
+  def feedback_redirect_answer(msg: Message, chatId: Long, mId: Long): Future[SendMessage] = {
+    Future successful SendMessage(Left(chatId), "Ответ от поддержки: " + msg.text.getOrElse(""), replyToMessageId = Some(mId))
   }
 
   def create_bid(chatId: Long, msg: Message, contIdOpt: Option[Int], tOpt: Option[String]): Future[SendMessage] = {
@@ -377,6 +427,11 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                  |${uc.get.firstName} ${uc.get.lastName.getOrElse("")}
                  |${uc.get.dateRegistred}
                  |
+                 |В нашей базе данных мы не нашли компаний, соответсвующих вашему номеру телефона,
+                 |поэтому функция /create_bid (составление предварительной заявки на поставку товара)
+                 |для вас будет недоступна до того, как мы зарегистрируем вашу компанию.
+                 |После этого вам останеться снова ввести комманду /start.
+                 |
                  |Если вы обращаетесь к нашему боту впервые то напишите об этом в поддержку,
                  |(комманда /feedback ) указав имя и номер телефона.
           """.stripMargin,
@@ -387,7 +442,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         else if (com.isDefined) {
           SendMessage(Left(chatId),
             s"""
-               |Поздровляем, вы успешно загестрировались под именем
+               |Поздровляем, вы успешно зарегистрировались под именем
                |${contact.firstName} ${contact.lastName.getOrElse("")}
                |
                |Вы выбраны представителем компании "${com.get.companyName}", так как
@@ -401,13 +456,15 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
         } else {
           SendMessage(Left(chatId),
             s"""
-               |Поздровляем, вы успешно загестрировались под именем
+               |Поздровляем, вы успешно зарегистрировались под именем
                |${contact.firstName} ${contact.lastName.getOrElse("")}
                |
                |В нашей базе данных мы не нашли компаний, соответсвующих вашему номеру телефона,
-               |поэтому некоторые функции бота для вас будут недоступны.
+               |поэтому функция /create_bid (составление предварительной заявки на поставку товара)
+               |для вас будет недоступна до того, как мы зарегистрируем вашу компанию.
+               |После этого вам останеться снова ввести комманду /start.
                |
-               |Если являетесь уполномоченым представителем какой-либо компании в нашем реестре,
+               |Если вы являетесь уполномоченым представителем какой-либо компании в нашем реестре,
                |то напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
           """.stripMargin,
             replyMarkup = Some(mkp)
@@ -429,17 +486,16 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case "create_bid" :: chatId :: t :: Nil =>
         create_bid(msg.chat.id, msg, Try(chatId.toInt).toOption, Some(t))
 
-      case "feedback_request":: Nil =>
+      case "feedback_request" :: Nil =>
         create_feedback_request(msg)
 
       case "feedback_response" :: chatId :: mId :: Nil =>
         feedback_redirect_answer(msg, chatId.toLong, mId.toLong)
 
-    } getOrElse (Future successful errorMsg(msg.chat.id))
-  }
+      case "monitoring" :: Nil =>
+        monitoring(msg.chat.id, msg.text.get)
 
-  def feedback_redirect_answer(msg: Message, chatId: Long, mId: Long): Future[SendMessage] = {
-    Future successful SendMessage(Left(chatId), msg.text.getOrElse(""), replyToMessageId = Some(mId))
+    } getOrElse (Future successful errorMsg(msg.chat.id))
   }
 
   def sendMessageToChat(sendMsg: SendMessage): Future[Int] = {
