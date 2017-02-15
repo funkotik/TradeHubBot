@@ -14,7 +14,7 @@ import play.api.libs.ws.{WSClient, WSResponse}
 import org.asynchttpclient.request.body.multipart.{FilePart, StringPart}
 
 import scala.concurrent.Promise
-import play.api.mvc.{Action, Controller}
+import play.api.mvc.{Action, AnyContent, Controller}
 
 import scala.concurrent.{ExecutionContext, Future}
 import org.json4s._
@@ -48,18 +48,21 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     new EnumNameSerializer(ChatAction) +
     new EnumNameSerializer(ParseMode)
 
-  def index = Action.async { request =>
+  def index: Action[AnyContent] = Action.async { request =>
 //    tenders.getAllTenders("https://public.api.px.openprocurement.org/api/2.3/tenders")
-    setWebhook()
+    setWebhook().map { x =>
+      println(x.body)
+    }
+
     Future successful Ok("success")
   }
 
 
-  def tender(query: String) = Action.async{
+  def tender(query: String): Action[AnyContent] = Action.async{
     tenders.find(query).map(x => Ok(views.html.tenderList(x)))
   }
 
-  def inbox = Action.async { request =>
+  def inbox: Action[AnyContent] = Action.async { request =>
 
     val js = request.body.asJson.get
     val update = fromJson[Update](js.toString)
