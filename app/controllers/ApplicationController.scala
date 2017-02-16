@@ -66,7 +66,6 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
     val js = request.body.asJson.get
     val update = fromJson[Update](js.toString)
-    println(update)
     val response = (update.message, update.callbackQuery) match {
       case (Some(msg), None) =>
         val command = getCommand(msg)
@@ -74,6 +73,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           case Some("/start") =>
             start(msg.chat.id)
           case Some("/create_bid") if msg.from.isDefined =>
+            println(1)
             create_bid_message(msg.chat.id, msg.from.get.id)
           case Some("/feedback") =>
             feedback_message(msg.chat.id)
@@ -279,13 +279,13 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def create_bid_message(chatId: Long, userId: Long): Future[SendMessage] = {
+    println(2)
     userChat.getUserCommodities(userId, isSell = true).zip(
       userChat.getUserCommodities(userId, isSell = false)
     ).zip(userChat.get(chatId))
-
       .map {
         case ((s, b), u) =>
-          println(u)
+          println(3)
           if (u.flatMap(_.contragentId).isDefined) {
             if (s.isEmpty && b.isEmpty)
               SendMessage(Left(chatId), "Рамковых договоров для вашей компании не найдено!")
@@ -301,6 +301,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
               )
               val keyboard = InlineKeyboardMarkup(buttons)
+              println(4)
               SendMessage(Left(chatId), "Какой тип заявки вы хотите составить?", replyMarkup = Some(keyboard))
             }
           }

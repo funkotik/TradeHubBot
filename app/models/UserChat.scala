@@ -35,7 +35,10 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
     db.run(userChats.filter(_.contragentId === partnerId).result.headOption)
 
   def get(chatId: Long): Future[Option[UsersChatsRow]] = {
-    db.run(userChats.filter(_.chatId === chatId.toInt).result.headOption)
+    println(2.3)
+    val res = db.run(userChats.filter(_.chatId === chatId.toInt).result.headOption)
+    res.map(x => println("2.4" + x))
+    res
   }
 
   def insert(user: UsersChatsRow): Future[Int] =
@@ -45,20 +48,23 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
     db.run(userChats.filter(_.id === id).delete)
 
   def getUserCommodities(userId: Long, isSell: Boolean): Future[Seq[(Int, String)]] = {
+    println(2.1)
     val query = for {
-      (comm, _) <- {
+      comm <- {
         if (isSell)
           userChats.filter(_.chatId === userId.toInt) join
             contracts on (_.contragentId === _.producerId) join
-            commodities on (_._2.commodityId === _.commodityId) groupBy (_._2)
+            commodities on (_._2.commodityId === _.commodityId)
         else
           userChats.filter(_.chatId === userId.toInt) join
             contracts on (_.contragentId === _.consumerId) join
-            commodities on (_._2.commodityId === _.commodityId) groupBy (_._2)
+            commodities on (_._2.commodityId === _.commodityId)
       }
-    } yield (comm.commodityId, comm.name)
+    } yield (comm._2.commodityId, comm._2.name)
 
-    db.run(query.result)
+    val res = db.run(query.result).map(x => x.distinct)
+    res.onComplete(x => println("2.2" + x))
+    res
   }
 
   def getPartners(userId: Long, commodityId: Int, isSell: Boolean): Future[Seq[(Int, String, Int, Int)]] = {
