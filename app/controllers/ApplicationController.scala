@@ -280,7 +280,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def create_bid_message(chatId: Long, userId: Long): Future[SendMessage] = {
     println(2)
-    userChat.getUserCommodities(userId, isSell = true).zip(
+    val res = userChat.getUserCommodities(userId, isSell = true).zip(
       userChat.getUserCommodities(userId, isSell = false)
     ).zip(userChat.get(chatId))
       .map {
@@ -315,7 +315,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
                 |то напишите об этом в поддержку, (комманда /feedback ) указав имя и номер телефона.
               """.stripMargin)
       }
-
+    res recover {case e => e.printStackTrace()}
+    res
   }
 
   def create_bid_choose_commodity(chatId: Long, value: String): Future[SendMessage] = {
