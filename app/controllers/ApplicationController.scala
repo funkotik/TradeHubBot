@@ -135,15 +135,17 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
   }
 
   def createContract(chatId: Long, bidId: Int): Future[SendMessage] = {
-
-
-    Future successful SendMessage(Right(""), "")
+    sendMessageToChat(SendMessage(Left(chatId), "Введите количество едениц товара", replyMarkup = Some(ForceReply()))).map { mid =>
+      cache.set(s"reply:$chatId:$mid", "quantity")
+      SendMessage(Left(chatId), "Например просто \"500\" или \"0.2\"")
+    }
   }
 
   def quitContract(chatId: Long, bidId: Int): Future[SendMessage] = {
     bid.getWithChats(bidId).map {
       case Some((b, cont, comm, prod, cons, prodComp, consComp)) =>
         val recChatId = if (chatId == prod.chatId) cons.chatId else prod.chatId
+        cache.remove(s"contract_mode:$chatId")
         sendMessageToChat(SendMessage(Left(recChatId), "Ваш партнер покинул диалог"))
         SendMessage(Left(chatId), "Вы вышли из диалога")
       case _ => errorMsg(chatId)
@@ -774,16 +776,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def process_reply(msg: Message, replyTo: Message): Future[SendMessage] = {
 
-    val cv = cache.get[String](s"reply:${
-      msg.chat.id
-    }:${
-      replyTo.messageId
-    }")
-    println(s"reply:${
-      msg.chat.id
-    }:${
-      replyTo.messageId
-    }")
+    val cv = cache.get[String](s"reply:${msg.chat.id}:${replyTo.messageId}")
+    println(s"reply:${msg.chat.id}:${replyTo.messageId}")
     println(cv)
     cv.map(_.split(":").toList) map {
       case "create_bid" :: chatId :: t :: Nil =>
@@ -798,10 +792,13 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case "monitoring" :: Nil =>
         monitoring(msg.chat.id, msg.text.get)
 
+//      case "quantity" :: Nil =>
+//        set
+
     } getOrElse (Future successful errorMsg(msg.chat.id))
   }
 
-  def redirectMessageToChat(msg: ForwardMessage) = {
+  def redirectMessageToChat(msg: ForwardMessage): Future[Int] = {
     ws.url(url + "/forwardMessage")
       .post(Json.parse(toJson(msg).toString)).map {
       x => (x.json \ "result" \ "message_id").as[Int]
