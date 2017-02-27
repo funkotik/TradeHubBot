@@ -1,41 +1,41 @@
 package models
 
-import java.util.{Calendar, Date, GregorianCalendar}
+//import java.util.{Calendar, Date, GregorianCalendar}
 import javax.inject.Inject
-import javax.xml.datatype
-import javax.xml.datatype.{DatatypeFactory, XMLGregorianCalendar}
+//import javax.xml.datatype
+//import javax.xml.datatype.{DatatypeFactory, XMLGregorianCalendar}
 
 //import co.theasi.plotly._
-//import com.ning.http.client.Realm.{AuthScheme, RealmBuilder}
+import com.ning.http.client.Realm.{AuthScheme, RealmBuilder}
 //import dispatch.{Future, as, url}
 //import generated.ExpectedPriceResults
 //import org.joda.time.{DateTime, DateTimeZone, ReadableDuration}
 //
-import scala.concurrent.ExecutionContext
+//import scala.concurrent.ExecutionContext
 import play.api.libs.ws.{WSAuthScheme, WSClient}
-
+//
 import scala.concurrent._
-import scala.util.Random
-
-/**
-  * Created by v-yaroslavskyi on 2/19/17.
-  */
-
-class Service extends generated.PricecurveBindings with
-  scalaxb.Soap11ClientsAsync with
-  scalaxb.DispatchHttpClientsAsync {
-
-}
-
+//import scala.util.Random
+//
+///**
+//  * Created by v-yaroslavskyi on 2/19/17.
+//  */
+//
+//class Service extends generated.PricecurveBindings with
+//  scalaxb.Soap11ClientsAsync with
+//  scalaxb.DispatchHttpClientsAsync {
+//
+//}
+//
 
 class Analytics @Inject()(ws: WSClient)(implicit exc: ExecutionContext) {
-
-
-  private val service = (new Service).service
-
-
-//  def getAnalytics: Future[ExpectedPriceResults] = {
 //
+//
+//  private val service = (new Service).service
+//
+//
+////  def getAnalytics: Future[ExpectedPriceResults] = {
+////
 //    // Generate uniformly distributed x
 //    val dates = (1 to 11).map(x => new DateTime(2016, 12, 2, 0, 0).withTimeAtStartOfDay().plusWeeks(x).toString())
 //
