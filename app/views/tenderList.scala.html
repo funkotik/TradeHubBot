@@ -51,7 +51,7 @@
                         <p>Размещено: @{tnr.startDate}</p>
                         <p>Торги заканчиваються: @{tnr.endDate}</p>
                         <p>@{tnr.description.getOrElse("Описание отсутсвует").take(100)}@if(tnr.description.getOrElse("").length > 100){...}</p>
-                        <button type="button" class="btn btn-default"><a href="https://zakupki.prom.ua/commercial/tenders/@{tnr.link}">Ссылка на тендер на zakupki.prom.ua</a></button>
+                        <button type="button" class="btn btn-default"><a href="https://zakupki.prom.ua/@if(tnr.isCommercial){commercial}else{gov}/tenders/@{tnr.link}">Ссылка на тендер на zakupki.prom.ua</a></button>
                     </div>
                 }
             </div>

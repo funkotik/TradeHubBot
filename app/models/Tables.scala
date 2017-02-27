@@ -21,34 +21,35 @@ trait Tables {
   /** Entity class storing rows of table Bids
    *  @param id Database column id SqlType(serial), AutoInc, PrimaryKey
    *  @param authorId Database column author_id SqlType(int4)
-   *  @param issell Database column issell SqlType(bool)
-   *  @param commodityId Database column commodity_id SqlType(int4)
-   *  @param note Database column note SqlType(text) */
-  case class BidsRow(id: Int, authorId: Int, issell: Boolean, commodityId: Int, note: String)
+   *  @param note Database column note SqlType(text)
+   *  @param contractId Database column contract_id SqlType(int4)
+   *  @param consumerConfirmed Database column consumer_confirmed SqlType(bool), Default(None)
+   *  @param producerConfirmed Database column producer_confirmed SqlType(bool), Default(None) */
+  case class BidsRow(id: Int, authorId: Int, note: String, contractId: Int, consumerConfirmed: Option[Boolean] = None, producerConfirmed: Option[Boolean] = None)
   /** GetResult implicit for fetching BidsRow objects using plain SQL queries */
-  implicit def GetResultBidsRow(implicit e0: GR[Int], e1: GR[Boolean], e2: GR[String]): GR[BidsRow] = GR{
+  implicit def GetResultBidsRow(implicit e0: GR[Int], e1: GR[String], e2: GR[Option[Boolean]]): GR[BidsRow] = GR{
     prs => import prs._
-    BidsRow.tupled((<<[Int], <<[Int], <<[Boolean], <<[Int], <<[String]))
+    BidsRow.tupled((<<[Int], <<[Int], <<[String], <<[Int], <<?[Boolean], <<?[Boolean]))
   }
   /** Table description of table bids. Objects of this class serve as prototypes for rows in queries. */
   class Bids(_tableTag: Tag) extends Table[BidsRow](_tableTag, "bids") {
-    def * = (id, authorId, issell, commodityId, note) <> (BidsRow.tupled, BidsRow.unapply)
+    def * = (id, authorId, note, contractId, consumerConfirmed, producerConfirmed) <> (BidsRow.tupled, BidsRow.unapply)
     /** Maps whole row to an option. Useful for outer joins. */
-    def ? = (Rep.Some(id), Rep.Some(authorId), Rep.Some(issell), Rep.Some(commodityId), Rep.Some(note)).shaped.<>({r=>import r._; _1.map(_=> BidsRow.tupled((_1.get, _2.get, _3.get, _4.get, _5.get)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
+    def ? = (Rep.Some(id), Rep.Some(authorId), Rep.Some(note), Rep.Some(contractId), consumerConfirmed, producerConfirmed).shaped.<>({r=>import r._; _1.map(_=> BidsRow.tupled((_1.get, _2.get, _3.get, _4.get, _5, _6)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
 
     /** Database column id SqlType(serial), AutoInc, PrimaryKey */
     val id: Rep[Int] = column[Int]("id", O.AutoInc, O.PrimaryKey)
     /** Database column author_id SqlType(int4) */
     val authorId: Rep[Int] = column[Int]("author_id")
-    /** Database column issell SqlType(bool) */
-    val issell: Rep[Boolean] = column[Boolean]("issell")
-    /** Database column commodity_id SqlType(int4) */
-    val commodityId: Rep[Int] = column[Int]("commodity_id")
     /** Database column note SqlType(text) */
     val note: Rep[String] = column[String]("note")
+    /** Database column contract_id SqlType(int4) */
+    val contractId: Rep[Int] = column[Int]("contract_id")
+    /** Database column consumer_confirmed SqlType(bool), Default(None) */
+    val consumerConfirmed: Rep[Option[Boolean]] = column[Option[Boolean]]("consumer_confirmed", O.Default(None))
+    /** Database column producer_confirmed SqlType(bool), Default(None) */
+    val producerConfirmed: Rep[Option[Boolean]] = column[Option[Boolean]]("producer_confirmed", O.Default(None))
 
-    /** Foreign key referencing Commodities (database name bids_commodities_commodity_id_fk) */
-    lazy val commoditiesFk = foreignKey("bids_commodities_commodity_id_fk", commodityId, Commodities)(r => r.commodityId, onUpdate=ForeignKeyAction.Cascade, onDelete=ForeignKeyAction.Cascade)
     /** Foreign key referencing Companies (database name bids_companies_company_id_fk) */
     lazy val companiesFk = foreignKey("bids_companies_company_id_fk", authorId, Companies)(r => r.companyId, onUpdate=ForeignKeyAction.Cascade, onDelete=ForeignKeyAction.Cascade)
   }
@@ -200,18 +201,19 @@ trait Tables {
    *  @param authorCompany Database column author_company SqlType(varchar), Length(255,true)
    *  @param telephone Database column telephone SqlType(varchar), Length(255,true)
    *  @param status Database column status SqlType(varchar), Length(255,true)
-   *  @param isCommercial Database column is_commercial SqlType(bool) */
-  case class TendersRow(id: Int, startDate: java.sql.Date, endDate: java.sql.Date, numberOfBids: Int, amount: Double, currency: String, taxIncluded: Boolean, title: String, description: Option[String] = None, zpuId: String, link: String, lotsText: Option[String] = None, authorCompany: String, telephone: String, status: String, isCommercial: Boolean)
+   *  @param isCommercial Database column is_commercial SqlType(bool)
+   *  @param stampModified Database column stamp_modified SqlType(int8) */
+  case class TendersRow(id: Int, startDate: java.sql.Date, endDate: java.sql.Date, numberOfBids: Int, amount: Double, currency: String, taxIncluded: Boolean, title: String, description: Option[String] = None, zpuId: String, link: String, lotsText: Option[String] = None, authorCompany: String, telephone: String, status: String, isCommercial: Boolean, stampModified: Long)
   /** GetResult implicit for fetching TendersRow objects using plain SQL queries */
-  implicit def GetResultTendersRow(implicit e0: GR[Int], e1: GR[java.sql.Date], e2: GR[Double], e3: GR[String], e4: GR[Boolean], e5: GR[Option[String]]): GR[TendersRow] = GR{
+  implicit def GetResultTendersRow(implicit e0: GR[Int], e1: GR[java.sql.Date], e2: GR[Double], e3: GR[String], e4: GR[Boolean], e5: GR[Option[String]], e6: GR[Long]): GR[TendersRow] = GR{
     prs => import prs._
-    TendersRow.tupled((<<[Int], <<[java.sql.Date], <<[java.sql.Date], <<[Int], <<[Double], <<[String], <<[Boolean], <<[String], <<?[String], <<[String], <<[String], <<?[String], <<[String], <<[String], <<[String], <<[Boolean]))
+    TendersRow.tupled((<<[Int], <<[java.sql.Date], <<[java.sql.Date], <<[Int], <<[Double], <<[String], <<[Boolean], <<[String], <<?[String], <<[String], <<[String], <<?[String], <<[String], <<[String], <<[String], <<[Boolean], <<[Long]))
   }
   /** Table description of table tenders. Objects of this class serve as prototypes for rows in queries. */
   class Tenders(_tableTag: Tag) extends Table[TendersRow](_tableTag, "tenders") {
-    def * = (id, startDate, endDate, numberOfBids, amount, currency, taxIncluded, title, description, zpuId, link, lotsText, authorCompany, telephone, status, isCommercial) <> (TendersRow.tupled, TendersRow.unapply)
+    def * = (id, startDate, endDate, numberOfBids, amount, currency, taxIncluded, title, description, zpuId, link, lotsText, authorCompany, telephone, status, isCommercial, stampModified) <> (TendersRow.tupled, TendersRow.unapply)
     /** Maps whole row to an option. Useful for outer joins. */
-    def ? = (Rep.Some(id), Rep.Some(startDate), Rep.Some(endDate), Rep.Some(numberOfBids), Rep.Some(amount), Rep.Some(currency), Rep.Some(taxIncluded), Rep.Some(title), description, Rep.Some(zpuId), Rep.Some(link), lotsText, Rep.Some(authorCompany), Rep.Some(telephone), Rep.Some(status), Rep.Some(isCommercial)).shaped.<>({r=>import r._; _1.map(_=> TendersRow.tupled((_1.get, _2.get, _3.get, _4.get, _5.get, _6.get, _7.get, _8.get, _9, _10.get, _11.get, _12, _13.get, _14.get, _15.get, _16.get)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
+    def ? = (Rep.Some(id), Rep.Some(startDate), Rep.Some(endDate), Rep.Some(numberOfBids), Rep.Some(amount), Rep.Some(currency), Rep.Some(taxIncluded), Rep.Some(title), description, Rep.Some(zpuId), Rep.Some(link), lotsText, Rep.Some(authorCompany), Rep.Some(telephone), Rep.Some(status), Rep.Some(isCommercial), Rep.Some(stampModified)).shaped.<>({r=>import r._; _1.map(_=> TendersRow.tupled((_1.get, _2.get, _3.get, _4.get, _5.get, _6.get, _7.get, _8.get, _9, _10.get, _11.get, _12, _13.get, _14.get, _15.get, _16.get, _17.get)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
 
     /** Database column id SqlType(serial), AutoInc, PrimaryKey */
     val id: Rep[Int] = column[Int]("id", O.AutoInc, O.PrimaryKey)
@@ -245,6 +247,8 @@ trait Tables {
     val status: Rep[String] = column[String]("status", O.Length(255,varying=true))
     /** Database column is_commercial SqlType(bool) */
     val isCommercial: Rep[Boolean] = column[Boolean]("is_commercial")
+    /** Database column stamp_modified SqlType(int8) */
+    val stampModified: Rep[Long] = column[Long]("stamp_modified")
   }
   /** Collection-like TableQuery object for table Tenders */
   lazy val Tenders = new TableQuery(tag => new Tenders(tag))
@@ -286,31 +290,31 @@ trait Tables {
 
   /** Entity class storing rows of table UsersChats
    *  @param id Database column id SqlType(serial), AutoInc, PrimaryKey
-   *  @param chatId Database column chat_id SqlType(int4)
-   *  @param username Database column username SqlType(varchar), Length(255,true)
+   *  @param chatId Database column chat_id SqlType(int8)
+   *  @param userId Database column user_id SqlType(int8), Default(None)
    *  @param telephone Database column telephone SqlType(varchar), Length(15,true)
    *  @param contragentId Database column contragent_id SqlType(int4), Default(None)
    *  @param firstName Database column first_name SqlType(varchar), Length(50,true)
    *  @param lastName Database column last_name SqlType(varchar), Length(50,true), Default(None)
    *  @param dateRegistred Database column date_registred SqlType(date) */
-  case class UsersChatsRow(id: Int, chatId: Int, username: String, telephone: String, contragentId: Option[Int] = None, firstName: String, lastName: Option[String] = None, dateRegistred: java.sql.Date)
+  case class UsersChatsRow(id: Int, chatId: Long, userId: Option[Long] = None, telephone: String, contragentId: Option[Int] = None, firstName: String, lastName: Option[String] = None, dateRegistred: java.sql.Date)
   /** GetResult implicit for fetching UsersChatsRow objects using plain SQL queries */
-  implicit def GetResultUsersChatsRow(implicit e0: GR[Int], e1: GR[String], e2: GR[Option[Int]], e3: GR[Option[String]], e4: GR[java.sql.Date]): GR[UsersChatsRow] = GR{
+  implicit def GetResultUsersChatsRow(implicit e0: GR[Int], e1: GR[Long], e2: GR[Option[Long]], e3: GR[String], e4: GR[Option[Int]], e5: GR[Option[String]], e6: GR[java.sql.Date]): GR[UsersChatsRow] = GR{
     prs => import prs._
-    UsersChatsRow.tupled((<<[Int], <<[Int], <<[String], <<[String], <<?[Int], <<[String], <<?[String], <<[java.sql.Date]))
+    UsersChatsRow.tupled((<<[Int], <<[Long], <<?[Long], <<[String], <<?[Int], <<[String], <<?[String], <<[java.sql.Date]))
   }
   /** Table description of table users_chats. Objects of this class serve as prototypes for rows in queries. */
   class UsersChats(_tableTag: Tag) extends Table[UsersChatsRow](_tableTag, "users_chats") {
-    def * = (id, chatId, username, telephone, contragentId, firstName, lastName, dateRegistred) <> (UsersChatsRow.tupled, UsersChatsRow.unapply)
+    def * = (id, chatId, userId, telephone, contragentId, firstName, lastName, dateRegistred) <> (UsersChatsRow.tupled, UsersChatsRow.unapply)
     /** Maps whole row to an option. Useful for outer joins. */
-    def ? = (Rep.Some(id), Rep.Some(chatId), Rep.Some(username), Rep.Some(telephone), contragentId, Rep.Some(firstName), lastName, Rep.Some(dateRegistred)).shaped.<>({r=>import r._; _1.map(_=> UsersChatsRow.tupled((_1.get, _2.get, _3.get, _4.get, _5, _6.get, _7, _8.get)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
+    def ? = (Rep.Some(id), Rep.Some(chatId), userId, Rep.Some(telephone), contragentId, Rep.Some(firstName), lastName, Rep.Some(dateRegistred)).shaped.<>({r=>import r._; _1.map(_=> UsersChatsRow.tupled((_1.get, _2.get, _3, _4.get, _5, _6.get, _7, _8.get)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
 
     /** Database column id SqlType(serial), AutoInc, PrimaryKey */
     val id: Rep[Int] = column[Int]("id", O.AutoInc, O.PrimaryKey)
-    /** Database column chat_id SqlType(int4) */
-    val chatId: Rep[Int] = column[Int]("chat_id")
-    /** Database column username SqlType(varchar), Length(255,true) */
-    val username: Rep[String] = column[String]("username", O.Length(255,varying=true))
+    /** Database column chat_id SqlType(int8) */
+    val chatId: Rep[Long] = column[Long]("chat_id")
+    /** Database column user_id SqlType(int8), Default(None) */
+    val userId: Rep[Option[Long]] = column[Option[Long]]("user_id", O.Default(None))
     /** Database column telephone SqlType(varchar), Length(15,true) */
     val telephone: Rep[String] = column[String]("telephone", O.Length(15,varying=true))
     /** Database column contragent_id SqlType(int4), Default(None) */

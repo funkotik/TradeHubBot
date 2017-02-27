@@ -35,10 +35,7 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
     db.run(userChats.filter(_.contragentId === partnerId).result.headOption)
 
   def get(chatId: Long): Future[Option[UsersChatsRow]] = {
-    println(2.3)
-    val res = db.run(userChats.filter(_.chatId === chatId.toInt).result.headOption)
-    res.map(x => println("2.4" + x))
-    res
+    db.run(userChats.filter(_.chatId === chatId).result.headOption)
   }
 
   def insert(user: UsersChatsRow): Future[Int] =
@@ -48,35 +45,32 @@ class UserChat @Inject()(dbConfigProvider: DatabaseConfigProvider)
     db.run(userChats.filter(_.id === id).delete)
 
   def getUserCommodities(userId: Long, isSell: Boolean): Future[Seq[(Int, String)]] = {
-    println(2.1)
     val query = for {
       comm <- {
         if (isSell)
-          userChats.filter(_.chatId === userId.toInt) join
+          userChats.filter(_.userId === userId) join
             contracts on (_.contragentId === _.producerId) join
             commodities on (_._2.commodityId === _.commodityId)
         else
-          userChats.filter(_.chatId === userId.toInt) join
+          userChats.filter(_.userId === userId) join
             contracts on (_.contragentId === _.consumerId) join
             commodities on (_._2.commodityId === _.commodityId)
       }
     } yield (comm._2.commodityId, comm._2.name)
 
-    val res = db.run(query.result).map(x => x.distinct)
-    res.onComplete(x => println("2.2" + x))
-    res
+    db.run(query.result).map(x => x.distinct)
   }
 
   def getPartners(userId: Long, commodityId: Int, isSell: Boolean): Future[Seq[(Int, String, Int, Int)]] = {
     val query = for {
       ((usr, cont), com) <- {
         if (isSell)
-          userChats.filter(_.chatId === userId.toInt) join
+          userChats.filter(_.userId === userId) join
             contracts.filter(_.commodityId === commodityId) on (_.contragentId === _.producerId) join
             companies on (_._2.consumerId === _.companyId)
 
         else
-          userChats.filter(_.chatId === userId.toInt) join
+          userChats.filter(_.userId === userId) join
             contracts.filter(_.commodityId === commodityId) on (_.contragentId === _.consumerId) join
             companies on (_._2.producerId === _.companyId)
       }
