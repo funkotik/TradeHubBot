@@ -89,6 +89,10 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             monitoring_message(msg.chat.id)
           case Some("/monitoring_news") =>
             monitoring_news_message(msg.chat.id)
+          case Some("/contract") if mode.isDefined =>
+            createContract(msg.chat.id, mode.get)
+          case Some("/quit") if mode.isDefined =>
+            quitContract(msg.chat.id, mode.get)
           case None if mode.isDefined =>
             redirectMessageToPartner(msg, mode.get)
           case _ =>
@@ -127,6 +131,22 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       if (x.chatId.isLeft) {
         Ok(toAnswerJson(x, x.methodName))
       } else Ok
+    }
+  }
+
+  def createContract(chatId: Long, bidId: Int): Future[SendMessage] = {
+
+
+    Future successful SendMessage(Right(""), "")
+  }
+
+  def quitContract(chatId: Long, bidId: Int): Future[SendMessage] = {
+    bid.getWithChats(bidId).map {
+      case Some((b, cont, comm, prod, cons, prodComp, consComp)) =>
+        val recChatId = if (chatId == prod.chatId) cons.chatId else prod.chatId
+        sendMessageToChat(SendMessage(Left(recChatId), "Ваш партнер покинул диалог"))
+        SendMessage(Left(chatId), "Вы вышли из диалога")
+      case _ => errorMsg(chatId)
     }
   }
 
