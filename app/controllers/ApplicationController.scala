@@ -91,7 +91,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           case Some("/monitoring_news") =>
             monitoring_news_message(msg.chat.id)
           case Some("/contract") if mode.isDefined =>
-            askQuantity(msg.chat.id, mode.get)
+            askPrice(msg.chat.id)
           case Some("/quit") if mode.isDefined =>
             quitContract(msg.chat.id, mode.get)
           case _ =>
@@ -210,8 +210,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     msg.text.flatMap(x => Try(x.replace(",", ".").toDouble).toOption) match {
       case Some(x) =>
         cache.set(s"contract:$bidId:quantity", x)
-        sendMessageToChat(SendMessage(Left(msg.chat.id), s"Вы указали что цена за единицу будет $x грн")).flatMap { _ =>
-          askPrice(msg.chat.id)
+        sendMessageToChat(SendMessage(Left(msg.chat.id), s"Вы указали что контракт будет на $x едениц")).flatMap { _ =>
+          askTax(msg.chat.id, bidId)
         }
       case None =>
         sendMessageToChat(SendMessage(Left(msg.chat.id), "Я не смог распознать число, которое вы ввели, попробуйте снова")).flatMap { _ =>
@@ -224,7 +224,9 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     msg.text.flatMap(x => Try(x.replace(",", ".").toDouble).toOption) match {
       case Some(x) =>
         cache.set(s"contract:$bidId:price", x)
-        askTax(msg.chat.id, bidId)
+        sendMessageToChat(SendMessage(Left(msg.chat.id), s"Вы указали что цена за единицу будет $x грн")).flatMap { _ =>
+          askQuantity(msg.chat.id, bidId)
+        }
       case None =>
         sendMessageToChat(SendMessage(Left(msg.chat.id), "Я не смог распознать число, которое вы ввели, попробуйте снова")).flatMap { _ =>
           askPrice(msg.chat.id)
