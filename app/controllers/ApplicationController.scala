@@ -13,6 +13,7 @@ import org.asynchttpclient.{AsyncCompletionHandler, AsyncHttpClient, Response}
 import play.api.libs.json.{JsNumber, JsObject, JsValue, Json}
 import play.api.libs.ws.{WSAuthScheme, WSClient, WSResponse}
 import org.asynchttpclient.request.body.multipart.{FilePart, StringPart}
+import org.joda.time.format.DateTimeFormat
 import org.joda.time.{DateTime, DateTimeZone}
 
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
@@ -90,7 +91,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
           case Some("/monitoring_news") =>
             monitoring_news_message(msg.chat.id)
           case Some("/contract") if mode.isDefined =>
-            createContract(msg.chat.id, mode.get)
+            askQuantity(msg.chat.id, mode.get)
           case Some("/quit") if mode.isDefined =>
             quitContract(msg.chat.id, mode.get)
           case _ =>
@@ -119,6 +120,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
               case "c_b3" => create_bid_ask_conditions(cbq.from.id, cbVal)
               case "c_b4" => startBidDialog(cbq.from.id, cbVal)
               case "c_b5" => confirmBidCreation(cbq.from.id, cbVal)
+              case "c_b6" => processTax(cbq.from.id, cbVal)
               case "ms" => monitoring_stop(cbq.from.id, cbVal)
             }
           case _ => Future successful errorMsg(cbq.from.id)
@@ -133,32 +135,153 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     }
   }
 
-  def createContract(chatId: Long, bidId: Int): Future[SendMessage] = {
+  def askQuantity(chatId: Long, bidId: Int): Future[SendMessage] = {
     sendMessageToChat(SendMessage(Left(chatId), "Введите количество едениц товара", replyMarkup = Some(ForceReply()))).map { mid =>
       cache.set(s"reply:$chatId:$mid", "quantity")
       SendMessage(Left(chatId), "Например просто \"500\" или \"0.2\"")
     }
   }
 
+  def askPrice(chatId: Long): Future[SendMessage] = {
+    sendMessageToChat(SendMessage(Left(chatId),
+      s"""Укажите цену за еденицу в гривнах.""".stripMargin,
+      replyMarkup = Some(ForceReply()))).map { mid =>
+      cache.set(s"reply:$chatId:$mid", "price")
+      SendMessage(Left(chatId), "Например просто \"12543.2\" или \"10\"")
+    }
+  }
+
+  def askTax(chatId: Long, bidId: Int): Future[SendMessage] = {
+
+    val keyboard = InlineKeyboardMarkup(
+      Seq(
+        Seq(InlineKeyboardButton("Да", Some(s"c_b6;y:$bidId"))),
+        Seq(InlineKeyboardButton("Нет", Some(s"c_b6;n:$bidId")))
+      )
+    )
+    Future successful SendMessage(Left(chatId), "Поставка будет с НДС?", replyMarkup = Some(keyboard))
+  }
+
+  def askDate(chatId: Long, redisKey: String): Future[SendMessage] = {
+    sendMessageToChat(SendMessage(Left(chatId),
+      s"""Укажите дату в формате ДД.ММ.ГГГГ .""".stripMargin,
+      replyMarkup = Some(ForceReply()))).map { mid =>
+      cache.set(s"reply:$chatId:$mid", redisKey)
+      SendMessage(Left(chatId), "Например \"01.04.2017\" или \"27.06.2018\"")
+    }
+  }
+
+  def processTax(chatId: Long, value: String): Future[SendMessage] = {
+    val ans = value.split(":").head
+    val bidId = value.split(":").last
+    cache.set(s"contract:$bidId:tax", value == "y")
+    sendMessageToChat(SendMessage(Left(chatId), "Укажите дату поставки."))
+    askDate(chatId, "ship_date")
+  }
+
+  def processShipDate(msg: Message, bidId: Int): Future[SendMessage] = {
+    val formatter = DateTimeFormat.forPattern("dd.MM.yyyy")
+    Try(formatter.parseLocalDate(msg.text.getOrElse(""))) match {
+      case Success(x) =>
+        cache.set(s"contract:$bidId:ship_date", x.toDate)
+        askDate(msg.chat.id, "pay_date")
+      case Failure(_) =>
+        sendMessageToChat(SendMessage(Left(msg.chat.id), "Ошибка распознавания даты. Попробуйте снова."))
+        askDate(msg.chat.id, "ship_date")
+    }
+  }
+
+  def processPayDate(msg: Message, bidId: Int): Future[SendMessage] = {
+    val formatter = DateTimeFormat.forPattern("dd.MM.yyyy")
+    Try(formatter.parseLocalDate(msg.text.getOrElse(""))) match {
+      case Success(x) =>
+        cache.set(s"contract:$bidId:pay_date", x.toDate)
+        sendMessageToChat(SendMessage(Left(msg.chat.id), "Укажите дату оплаты."))
+        confirmContract(msg.chat.id, bidId)
+      case Failure(_) =>
+        sendMessageToChat(SendMessage(Left(msg.chat.id), "Ошибка распознавания даты. Попробуйте снова."))
+        askDate(msg.chat.id, "ship_date")
+    }
+  }
+
   def processQuantity(msg: Message, bidId: Int): Future[SendMessage] = {
     msg.text.flatMap(x => Try(x.replace(",", ".").toDouble).toOption) match {
       case Some(x) =>
-        sendMessageToChat(SendMessage(Left(msg.chat.id),
-          s"""Вы указали что хотите заключить контракт на поставку $x единиц товара
-             |Укажите цену за еденицу в гривнах.
-           """.stripMargin,
-          replyMarkup = Some(ForceReply()))).map { mid =>
-        cache.set(s"reply:${msg.chat.id}:$mid", "price")
-        SendMessage(Left(msg.chat.id), "Например просто \"12543.2\" или \"10\"")
-      }
+        cache.set(s"contract:$bidId:quantity", x)
+        sendMessageToChat(SendMessage(Left(msg.chat.id), s"Вы указали что цена за единицу будет $x грн")).flatMap { _ =>
+          askTax(msg.chat.id, bidId)
+        }
       case None =>
-        createContract(msg.chat.id, bidId)
-
+        sendMessageToChat(SendMessage(Left(msg.chat.id), "Я не смог распознать число, которое вы ввели, попробуйте снова")).flatMap { _ =>
+          askQuantity(msg.chat.id, bidId)
+        }
     }
-
-
   }
 
+  def processPrice(msg: Message, bidId: Int): Future[SendMessage] = {
+    msg.text.flatMap(x => Try(x.replace(",", ".").toDouble).toOption) match {
+      case Some(x) =>
+        cache.set(s"contract:$bidId:price", x)
+        askQuantity(msg.chat.id, bidId)
+      case None =>
+        sendMessageToChat(SendMessage(Left(msg.chat.id), "Я не смог распознать число, которое вы ввели, попробуйте снова")).flatMap { _ =>
+          askPrice(msg.chat.id)
+        }
+    }
+  }
+
+  def confirmContract(chatId: Long, bidId: Int): Future[SendMessage] = {
+    bid.getWithChats(bidId).map {
+      case Some((b, cont, comm, prod, cons, prodComp, consComp)) =>
+        for {
+          tax <- cache.get[Boolean](s"contract:$bidId:tax")
+          price <- cache.get[Double](s"contract:$bidId:price")
+          quantity <- cache.get[Double](s"contract:$bidId:quantity")
+          shipDate <- cache.get[Date](s"contract:$bidId:ship_date")
+          payDate <- cache.get[Date](s"contract:$bidId:pay_date")
+        } yield {
+          val taxVal = if(tax) quantity * price * 0.2 else 0
+          val total = quantity * price + taxVal
+          val msgText =
+            s"""
+              |Товар: ${comm.name}
+              |Заказчик: ${consComp.companyName}
+              |Поставщик: ${prodComp.companyName}
+              |
+              |Дата поставки: ${shipDate.toString}
+              |Дата оплаты: ${payDate.toString}
+              |
+              |Количество единиц: $quantity
+              |Цена за еденицу: $price
+              |НДС: $taxVal
+              |
+              |Итого: $total
+            """.stripMargin
+          val buttons = Seq(
+            Seq(
+              InlineKeyboardButton("Согласен", callbackData = Some(s"c_b7;y:${
+                b.id
+              }"))
+            ),
+            Seq(
+              InlineKeyboardButton("Не согласен", callbackData = Some(s"c_b7;n:${
+                b.id
+              }"))
+            )
+          )
+          val keyboard = InlineKeyboardMarkup(buttons)
+          sendMessageToChat(SendMessage(Left(prod.chatId), msgText, replyMarkup = Some(keyboard))).zip(
+            sendMessageToChat(SendMessage(Left(cons.chatId), msgText, replyMarkup = Some(keyboard)))
+          ).map {
+            case (p, c) =>
+              cache.set(s"confirm_contract:${b.id}", (p, c))
+            case _ =>
+              errorMsg(chatId)
+          }
+        }
+        SendMessage(Right(""), "")
+    }
+  }
 
   def quitContract(chatId: Long, bidId: Int): Future[SendMessage] = {
     bid.getWithChats(bidId).map {
@@ -177,29 +300,29 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     val bidId = rsp.last.toInt
     bid.getWithChats(bidId).map {
       case Some((b, cont, comm, prod, cons, prodComp, consComp)) =>
-        cache.get[(Int, Int)](s"confirm_bid:${b.id}").foreach{
+        cache.get[(Int, Int)](s"confirm_bid:${b.id}").foreach {
           case (pMId, cMId) =>
             val msgText = if (chatId == prod.chatId) {
               bid.updateStatus(b.id, answer == "y", prod = true)
 
-                s"""
-                   |Обе стороны подтвердили свою заинтересованность по созданию дополнителного соглашения по котракту №${cont.contractNumber}
-                   |по продаже товара "${comm.name}", где поставщиком выступает компания "${prodComp.companyName}", а заказчиком - компания "${consComp.companyName}".
-                   |Вы подтверждаете свою заинтересованность?
-                   |Ответом "Да" вы подтверджаете то, что я стану вашим коммерческим предсавитилем в этой поставке.
-                   |"${prodComp.companyName}" - ${if (answer == "y") "Подтверждено" else "Отменено"}
-                   |"${consComp.companyName}" - ${b.consumerConfirmed.map(if (_) "Подтверждено" else "Отменено").getOrElse("Ожидание ответа")}
+              s"""
+                 |Обе стороны подтвердили свою заинтересованность по созданию дополнителного соглашения по котракту №${cont.contractNumber}
+                 |по продаже товара "${comm.name}", где поставщиком выступает компания "${prodComp.companyName}", а заказчиком - компания "${consComp.companyName}".
+                 |Вы подтверждаете свою заинтересованность?
+                 |Ответом "Да" вы подтверджаете то, что я стану вашим коммерческим предсавитилем в этой поставке.
+                 |"${prodComp.companyName}" - ${if (answer == "y") "Подтверждено" else "Отменено"}
+                 |"${consComp.companyName}" - ${b.consumerConfirmed.map(if (_) "Подтверждено" else "Отменено").getOrElse("Ожидание ответа")}
                 """.stripMargin
 
             } else {
               bid.updateStatus(b.id, answer == "y", prod = false)
-                s"""
-                   |Обе стороны подтвердили свою заинтересованность по созданию дополнителного соглашения по котракту №${cont.contractNumber}
-                   |по продаже товара "${comm.name}", где поставщиком выступает компания "${prodComp.companyName}", а заказчиком - компания "${consComp.companyName}".
-                   |Вы подтверждаете свою заинтересованность?
-                   |Ответом "Да" вы подтверджаете то, что я стану вашим коммерческим предсавитилем в этой поставке.
-                   |"${prodComp.companyName}" - ${b.producerConfirmed.map(if (_) "Подтверждено" else "Отменено").getOrElse("Ожидание ответа")}
-                   |"${consComp.companyName}" - ${if (answer == "y") "Подтверждено" else "Отменено"}
+              s"""
+                 |Обе стороны подтвердили свою заинтересованность по созданию дополнителного соглашения по котракту №${cont.contractNumber}
+                 |по продаже товара "${comm.name}", где поставщиком выступает компания "${prodComp.companyName}", а заказчиком - компания "${consComp.companyName}".
+                 |Вы подтверждаете свою заинтересованность?
+                 |Ответом "Да" вы подтверджаете то, что я стану вашим коммерческим предсавитилем в этой поставке.
+                 |"${prodComp.companyName}" - ${b.producerConfirmed.map(if (_) "Подтверждено" else "Отменено").getOrElse("Ожидание ответа")}
+                 |"${consComp.companyName}" - ${if (answer == "y") "Подтверждено" else "Отменено"}
                    """.stripMargin
             }
             val buttons = Seq(
@@ -219,7 +342,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             editMessageInChat(EditMessageText(Some(Left(cons.chatId)), Some(cMId), text = msgText, replyMarkup = Some(keyboard)))
 
 
-            if((if(chatId == prod.chatId) b.consumerConfirmed.getOrElse(false) else b.producerConfirmed.getOrElse(false)) && answer == "y"){
+            if ((if (chatId == prod.chatId) b.consumerConfirmed.getOrElse(false) else b.producerConfirmed.getOrElse(false)) && answer == "y") {
               val msgText =
                 """Хорошо, теперь начинаем оформление дополнительного соглашения к договору.
                   |Все сообщения, которые вы пишите, будут транслироваться в чат к вашему партнеру.
@@ -813,6 +936,16 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
       case "quantity" :: Nil if mode.isDefined =>
         processQuantity(msg, mode.get)
+
+      case "price" :: Nil if mode.isDefined =>
+        processPrice(msg, mode.get)
+
+      case "ship_date" :: Nil if mode.isDefined =>
+        processShipDate(msg, mode.get)
+
+      case "pay_date" :: Nil if mode.isDefined =>
+        processPayDate(msg, mode.get)
+
 
     } getOrElse (Future successful errorMsg(msg.chat.id))
   }
