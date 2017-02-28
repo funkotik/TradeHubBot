@@ -144,7 +144,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   def askPrice(chatId: Long): Future[SendMessage] = {
     sendMessageToChat(SendMessage(Left(chatId),
-      s"""Укажите цену за еденицу в гривнах.""".stripMargin,
+      s"""Укажите цену за единицу в гривнах.""".stripMargin,
       replyMarkup = Some(ForceReply()))).map { mid =>
       cache.set(s"reply:$chatId:$mid", "price")
       SendMessage(Left(chatId), "Например просто \"12543.2\" или \"10\"")
@@ -175,8 +175,9 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     val ans = value.split(":").head
     val bidId = value.split(":").last
     cache.set(s"contract:$bidId:tax", value == "y")
-    sendMessageToChat(SendMessage(Left(chatId), "Укажите дату поставки."))
-    askDate(chatId, "ship_date")
+    sendMessageToChat(SendMessage(Left(chatId), "Укажите дату поставки.")).flatMap { _ =>
+      askDate(chatId, "ship_date")
+    }
   }
 
   def processShipDate(msg: Message, bidId: Int): Future[SendMessage] = {
@@ -184,7 +185,9 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     Try(formatter.parseLocalDate(msg.text.getOrElse(""))) match {
       case Success(x) =>
         cache.set(s"contract:$bidId:ship_date", x.toDate)
-        askDate(msg.chat.id, "pay_date")
+        sendMessageToChat(SendMessage(Left(msg.chat.id), "Укажите дату оплаты.")).flatMap { _ =>
+          askDate(msg.chat.id, "pay_date")
+        }
       case Failure(_) =>
         sendMessageToChat(SendMessage(Left(msg.chat.id), "Ошибка распознавания даты. Попробуйте снова."))
         askDate(msg.chat.id, "ship_date")
@@ -196,7 +199,6 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
     Try(formatter.parseLocalDate(msg.text.getOrElse(""))) match {
       case Success(x) =>
         cache.set(s"contract:$bidId:pay_date", x.toDate)
-        sendMessageToChat(SendMessage(Left(msg.chat.id), "Укажите дату оплаты."))
         confirmContract(msg.chat.id, bidId)
       case Failure(_) =>
         sendMessageToChat(SendMessage(Left(msg.chat.id), "Ошибка распознавания даты. Попробуйте снова."))
