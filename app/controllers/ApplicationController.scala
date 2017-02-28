@@ -93,16 +93,15 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
             createContract(msg.chat.id, mode.get)
           case Some("/quit") if mode.isDefined =>
             quitContract(msg.chat.id, mode.get)
-          case None if mode.isDefined =>
-            redirectMessageToPartner(msg, mode.get)
           case _ =>
             msg.replyToMessage match {
               case Some(x) if msg.text.isDefined =>
-                process_reply(msg, x)
+                process_reply(msg, x, mode)
               case _ =>
                 msg.contact match {
                   case Some(x) => store_contact(msg.chat.id, x)
-                  case None => Future successful SendMessage(Left(msg.chat.id), "Я не понимаю этой комманды")
+                  case None if mode.isDefined => redirectMessageToPartner(msg, mode.get)
+                  case _ => Future successful SendMessage(Left(msg.chat.id), "Я не понимаю этой комманды")
                 }
             }
         }
@@ -140,6 +139,26 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       SendMessage(Left(chatId), "Например просто \"500\" или \"0.2\"")
     }
   }
+
+  def processQuantity(msg: Message, bidId: Int): Future[SendMessage] = {
+    msg.text.flatMap(x => Try(x.replace(",", ".").toDouble).toOption) match {
+      case Some(x) =>
+        sendMessageToChat(SendMessage(Left(msg.chat.id),
+          s"""Вы указали что хотите заключить контракт на поставку $x единиц товара
+             |Укажите цену за еденицу в гривнах.
+           """.stripMargin,
+          replyMarkup = Some(ForceReply()))).map { mid =>
+        cache.set(s"reply:${msg.chat.id}:$mid", "price")
+        SendMessage(Left(msg.chat.id), "Например просто \"12543.2\" или \"10\"")
+      }
+      case None =>
+        createContract(msg.chat.id, bidId)
+
+    }
+
+
+  }
+
 
   def quitContract(chatId: Long, bidId: Int): Future[SendMessage] = {
     bid.getWithChats(bidId).map {
@@ -774,7 +793,7 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
 
   }
 
-  def process_reply(msg: Message, replyTo: Message): Future[SendMessage] = {
+  def process_reply(msg: Message, replyTo: Message, mode: Option[Int]): Future[SendMessage] = {
 
     val cv = cache.get[String](s"reply:${msg.chat.id}:${replyTo.messageId}")
     println(s"reply:${msg.chat.id}:${replyTo.messageId}")
@@ -792,8 +811,8 @@ class ApplicationController @Inject()(ws: WSClient, conf: play.api.Configuration
       case "monitoring" :: Nil =>
         monitoring(msg.chat.id, msg.text.get)
 
-//      case "quantity" :: Nil =>
-//        set
+      case "quantity" :: Nil if mode.isDefined =>
+        processQuantity(msg, mode.get)
 
     } getOrElse (Future successful errorMsg(msg.chat.id))
   }
